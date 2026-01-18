@@ -10,23 +10,9 @@ const unauthorized = () =>
   });
 
 export const middleware = (request: NextRequest) => {
-  const { pathname, searchParams } = request.nextUrl;
+  const { pathname } = request.nextUrl;
   if (pathname === "/api/sync") {
-    const token = process.env.SYNC_TOKEN;
-    const queryToken = searchParams.get("token");
-    const authHeader = request.headers.get("authorization");
-    const bearerToken = authHeader?.startsWith("Bearer ")
-      ? authHeader.replace("Bearer ", "")
-      : null;
-    const isVercelCron =
-      process.env.VERCEL === "1" && request.headers.get("x-vercel-cron") === "1";
-
-    if (token && (bearerToken === token || queryToken === token)) {
-      return NextResponse.next();
-    }
-    if (!token && isVercelCron) {
-      return NextResponse.next();
-    }
+    return NextResponse.next();
   }
 
   const user = process.env.BASIC_AUTH_USER;
