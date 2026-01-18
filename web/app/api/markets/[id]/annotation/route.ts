@@ -6,9 +6,9 @@ const ALLOWED_STATES = ["NEW", "ON_DECK", "ACTIVE", "ARCHIVE"];
 
 export const PATCH = async (
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
-  const marketId = params?.id;
+  const { id: marketId } = await params;
   if (!marketId) {
     return NextResponse.json({ error: "Missing market id." }, { status: 400 });
   }

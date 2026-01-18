@@ -6,9 +6,9 @@ import config from "@/config/app-config.json";
 
 export const GET = async (
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
-  const marketId = params?.id;
+  const { id: marketId } = await params;
   if (!marketId) {
     return NextResponse.json({ error: "Missing market id." }, { status: 400 });
   }
