@@ -6,6 +6,12 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 const CONFIG_PATH = path.join(process.cwd(), "config/app-config.json");
+const DATABASE_URL =
+  process.env.DATABASE_URL ??
+  process.env.POSTGRES_URL ??
+  process.env.POSTGRES_PRISMA_URL ??
+  process.env.POSTGRES_URL_NON_POOLING ??
+  process.env.NEON_DATABASE_URL;
 const EVENTS_BASE_URL =
   "https://gamma-api.polymarket.com/events?active=true&closed=false&limit=100&offset=";
 const MAX_RETRIES = 3;
@@ -281,10 +287,10 @@ const buildMarketRecord = (market, event, index, config, allowedTags, excludeTag
 };
 
 const createPrismaClient = () => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is not set.");
+  if (!DATABASE_URL) {
+    throw new Error("DATABASE_URL or POSTGRES_URL is not set.");
   }
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: DATABASE_URL });
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
   return { prisma, pool };
