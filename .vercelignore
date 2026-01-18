@@ -1,0 +1,8 @@
+web/node_modules
+web/.next
+web/.env*
+web/.vercel
+web/dev.db
+web/.DS_Store
+web/*.log
+.env.local
