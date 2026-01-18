@@ -1,0 +1,75 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Market {
+  id              String      @id
+  eventId         String?
+  slug            String?
+  question        String
+  description     String?
+  resolutionSource String?
+  endDate         DateTime?
+  liquidity       Float       @default(0)
+  volume24h       Float       @default(0)
+  openInterest    Float       @default(0)
+  tags            Json
+  outcomes        Json?
+  isMultiOutcome  Boolean     @default(false)
+  restricted      Boolean     @default(false)
+  marketUrl       String?
+  isExcluded      Boolean     @default(false)
+  rawPayload      Json
+  lastSeenAt      DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  score           Score?
+  annotation      Annotation?
+}
+
+model Score {
+  marketId     String   @id
+  totalScore   Float
+  components   Json
+  flags        Json
+  scoreVersion String
+  refs         Json
+  computedAt   DateTime @default(now())
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+}
+
+model Annotation {
+  marketId  String      @id
+  state     MarketState @default(NEW)
+  notes     String?
+  owner     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+}
+
+model SyncStatus {
+  id                   Int       @id @default(1)
+  lastAttemptedSyncAt  DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastError            String?
+  lastStats            Json?
+  lastRefs             Json?
+}
+
+enum MarketState {
+  NEW
+  ON_DECK
+  ACTIVE
+  ARCHIVE
+}

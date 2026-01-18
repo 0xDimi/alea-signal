@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --canvas: #f6f1e7;
+  --surface: #fff9f0;
+  --ink: #16140f;
+  --muted: #6c6860;
+  --accent: #f25f5c;
+  --accent-deep: #bf3f3c;
+  --border: #e2d7c6;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  --font-sans: var(--font-space);
+  --font-display: var(--font-fraunces);
+  font-family: var(--font-space), ui-sans-serif, system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(242, 95, 92, 0.25);
+}

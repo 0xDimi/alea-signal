@@ -1,0 +1,68 @@
+{
+  "memo_max_days": 30,
+  "allowed_sectors": ["crypto", "finance", "economy"],
+  "sector_map": {
+    "crypto": [
+      "crypto",
+      "bitcoin",
+      "ethereum",
+      "defi",
+      "layer-1",
+      "layer-2",
+      "stablecoins",
+      "altcoins",
+      "solana",
+      "base",
+      "l1",
+      "l2",
+      "airdrop",
+      "meme"
+    ],
+    "finance": [
+      "stocks",
+      "equities",
+      "earnings",
+      "rates",
+      "fed",
+      "treasury",
+      "banking",
+      "commodities",
+      "bonds",
+      "etf",
+      "oil",
+      "gold"
+    ],
+    "economy": [
+      "inflation",
+      "cpi",
+      "gdp",
+      "jobs",
+      "unemployment",
+      "ppi",
+      "pmi",
+      "macroeconomy",
+      "recession",
+      "growth"
+    ]
+  },
+  "exclude_tags": ["politics", "election", "geopolitics", "government"],
+  "ref_percentile": 0.9,
+  "weights": {
+    "liquidity": 25,
+    "volume24h": 15,
+    "openInterest": 10,
+    "resolutionSource": 20,
+    "endDate": 10,
+    "fit": 20
+  },
+  "penalties": {
+    "restricted": -10,
+    "missing_tags": -5
+  },
+  "flags_thresholds": {
+    "min_liquidity": 5000,
+    "min_volume24h": 10000,
+    "min_open_interest": 5000
+  },
+  "score_version": "v1"
+}
