@@ -34,8 +34,9 @@ export const GET = async (request: Request) => {
     const result = await runSync();
     return NextResponse.json({ ok: true, result });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { ok: false, error: error?.message ?? String(error) },
+      { ok: false, error: message },
       { status: 500 }
     );
   }
