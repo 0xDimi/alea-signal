@@ -100,11 +100,11 @@ const isActiveMarket = (payload: unknown) => {
 
 const buildAllowedTagSet = () => {
   const allowed = new Set<string>();
-  const sectors = config.allowed_sectors ?? [];
-  const map = config.sector_map ?? {};
+  const sectors = (config.allowed_sectors ?? []) as string[];
+  const map = (config.sector_map ?? {}) as Record<string, string[]>;
   sectors.forEach((sector) => {
     const tags = map[sector] ?? [];
-    tags.forEach((tag: string) => allowed.add(String(tag).toLowerCase()));
+    tags.forEach((tag) => allowed.add(String(tag).toLowerCase()));
   });
   return allowed;
 };
