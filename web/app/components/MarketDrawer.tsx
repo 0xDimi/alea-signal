@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type TagItem = { slug: string; name: string };
 type Score = {
@@ -81,9 +81,6 @@ const formatCompact = new Intl.NumberFormat("en-US", {
 const formatMetric = (value?: number | null) =>
   Number.isFinite(value ?? NaN) ? `$${formatCompact.format(value ?? 0)}` : "—";
 
-const formatCount = (value?: number | null) =>
-  Number.isFinite(value ?? NaN) ? formatCompact.format(value ?? 0) : "—";
-
 const formatProbability = (value?: number | null) => {
   if (!Number.isFinite(value ?? NaN)) return "—";
   const numeric = value ?? 0;
@@ -97,12 +94,12 @@ const flagLabel = (flag: string) =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
 const componentLabelMap: Record<string, string> = {
-  resolutionIntegrity: "resolution integrity",
-  liquidityMicrostructure: "liquidity & microstructure",
-  modelability: "modelability",
-  participationQuality: "participation quality",
-  strategicFit: "strategic fit",
-  penalties: "penalties",
+  resolutionIntegrity: "Resolution integrity",
+  liquidityMicrostructure: "Liquidity & microstructure",
+  modelability: "Modelability",
+  participationQuality: "Participation quality",
+  strategicFit: "Strategic fit",
+  penalties: "Penalties",
 };
 
 const buildScoreSummary = (score?: Score | null) => {
@@ -144,6 +141,14 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
   const [draft, setDraft] = useState<Annotation>({});
   const [packDraft, setPackDraft] = useState<ResearchPackDraft | null>(null);
   const [savingPack, setSavingPack] = useState(false);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const focusRing =
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-soft)] focus-visible:border-transparent";
+  const inputBase = `w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2.5 text-sm text-[color:var(--ink)] placeholder:text-[color:var(--ink-dim)] ${focusRing}`;
+  const inputCompact = `w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--ink)] placeholder:text-[color:var(--ink-dim)] ${focusRing}`;
+  const sectionCard =
+    "rounded-[var(--radius-md)] border border-[color:var(--border)] bg-[color:var(--panel)] p-4";
   const loading = Boolean(marketId && market?.id !== marketId);
 
   useEffect(() => {
@@ -184,6 +189,40 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
       });
   }, [marketId]);
 
+  useEffect(() => {
+    if (!marketId) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusables = drawerRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusables || focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [marketId, onClose]);
+
   if (!marketId) return null;
 
   const components = market?.score?.components ?? {};
@@ -194,6 +233,16 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
     marketProbabilityValue !== null && aleaProbabilityValue !== null
       ? aleaProbabilityValue - marketProbabilityValue
       : null;
+  const deltaLabel =
+    deltaValue !== null ? `${deltaValue > 0 ? "+" : ""}${deltaValue.toFixed(1)} pts` : "—";
+  const deltaTone =
+    deltaValue === null
+      ? "text-[color:var(--ink-dim)]"
+      : deltaValue > 0
+        ? "text-emerald-200"
+        : deltaValue < 0
+          ? "text-rose-200"
+          : "text-[color:var(--ink)]";
 
   const saveResearchPack = async () => {
     if (!market || !packDraft) return;
@@ -229,92 +278,119 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div
-        className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-[color:var(--canvas)] opacity-80 backdrop-blur-sm animate-[overlay-in_200ms_ease-out]"
         onClick={onClose}
       />
-      <div className="relative z-10 h-full w-full max-w-xl overflow-y-auto bg-slate-950 px-6 py-8 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Market detail
-            </p>
-            <h3 className="mt-3 font-[family-name:var(--font-display)] text-2xl text-slate-100">
-              {loading ? "Loading…" : market?.question}
-            </h3>
-            <p className="mt-2 text-sm text-slate-300">
-              {market?.description || "No description provided."}
-            </p>
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="market-drawer-title"
+        className="relative z-10 h-full w-full max-w-xl overflow-y-auto bg-[color:var(--surface)] px-6 py-8 shadow-2xl animate-[drawer-in_200ms_ease-out]"
+      >
+        <div className="sticky top-0 z-20 -mx-6 mb-8 border-b border-[color:var(--border)] bg-[color:var(--surface-glass)] px-6 pb-6 pt-6 backdrop-blur">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-dim)]">
+                Market detail
+              </p>
+              <h3
+                id="market-drawer-title"
+                className="mt-3 font-[family-name:var(--font-display)] text-2xl text-[color:var(--ink-strong)]"
+              >
+                {loading ? (
+                  <span className="block h-6 w-3/4 animate-pulse rounded bg-[color:var(--panel-strong)]" />
+                ) : (
+                  market?.question
+                )}
+              </h3>
+              <p className="mt-2 text-sm text-[color:var(--ink-muted)]">
+                {loading ? (
+                  <span className="mt-2 block h-4 w-full max-w-md animate-pulse rounded bg-[color:var(--panel-strong)]" />
+                ) : (
+                  market?.description || "No description provided."
+                )}
+              </p>
+            </div>
+            <button
+              ref={closeButtonRef}
+              onClick={onClose}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--panel)] text-[color:var(--ink)] transition hover:border-[color:var(--accent-soft)] ${focusRing}`}
+              aria-label="Close"
+            >
+              <span aria-hidden="true" className="text-sm font-semibold">
+                X
+              </span>
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-300"
-          >
-            Close
-          </button>
-        </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Mode
+          <div
+            className={`${sectionCard} mt-5 grid grid-cols-1 gap-4 text-sm text-[color:var(--ink-muted)] tabular-nums sm:grid-cols-2`}
+          >
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                Mode
+              </div>
+              <div className="mt-1 font-semibold text-[color:var(--ink)]">
+                {market?.mode ?? "—"}
+              </div>
             </div>
-            <div className="mt-1 font-semibold text-slate-100">{market?.mode}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Time to expiry
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                Time to expiry
+              </div>
+              <div className="mt-1 font-semibold text-[color:var(--ink)]">
+                {market?.expiryLabel ??
+                  (market?.daysToExpiry !== null && market?.daysToExpiry !== undefined
+                    ? `${market?.daysToExpiry}d`
+                    : "—")}
+              </div>
             </div>
-            <div className="mt-1 font-semibold text-slate-100">
-              {market?.expiryLabel ??
-                (market?.daysToExpiry !== null && market?.daysToExpiry !== undefined
-                  ? `${market?.daysToExpiry}d`
-                  : "—")}
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                Liquidity
+              </div>
+              <div className="mt-1 font-semibold text-[color:var(--ink)]">
+                {formatMetric(market?.liquidity ?? 0)}
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Liquidity
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                Volume 24h
+              </div>
+              <div className="mt-1 font-semibold text-[color:var(--ink)]">
+                {formatMetric(market?.volume24h ?? 0)}
+              </div>
             </div>
-            <div className="mt-1 font-semibold text-slate-100">
-              {formatMetric(market?.liquidity ?? 0)}
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                Open interest
+              </div>
+              <div className="mt-1 font-semibold text-[color:var(--ink)]">
+                {formatMetric(market?.openInterest ?? null)}
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Volume 24h
-            </div>
-            <div className="mt-1 font-semibold text-slate-100">
-              {formatMetric(market?.volume24h ?? 0)}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Open interest
-            </div>
-            <div className="mt-1 font-semibold text-slate-100">
-              {formatCount(market?.openInterest ?? null)}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Score
-            </div>
-            <div className="mt-1 font-semibold text-slate-100">
-              {Math.round(market?.score?.totalScore ?? 0)} / 100
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                Score
+              </div>
+              <div className="mt-1 font-semibold text-[color:var(--ink)]">
+                {Math.round(market?.score?.totalScore ?? 0)} / 100
+              </div>
             </div>
           </div>
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Alea Probability Box
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">
+            Probability box
           </h4>
           {packDraft ? (
-            <div className="mt-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-sm text-slate-200">
-              <div className="grid grid-cols-2 gap-3">
+            <div className={`${sectionCard} mt-3 text-sm text-[color:var(--ink-muted)]`}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                    Pm (%)
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                    Market (%)
                   </label>
                   <input
                     type="number"
@@ -325,13 +401,13 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                         prev ? { ...prev, marketProbability: event.target.value } : prev
                       )
                     }
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputCompact}`}
                     placeholder="Market probability"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                    Pa (%)
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                    Alea (%)
                   </label>
                   <input
                     type="number"
@@ -342,30 +418,37 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                         prev ? { ...prev, aleaProbability: event.target.value } : prev
                       )
                     }
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputCompact}`}
                     placeholder="Alea probability"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Delta
                   </label>
-                  <div className="mt-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100">
-                    {deltaValue !== null ? `${deltaValue.toFixed(1)} pts` : "—"}
+                  <div
+                    className={`mt-2 rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm font-semibold tabular-nums ${deltaTone}`}
+                  >
+                    {deltaLabel}
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Confidence
                   </label>
                   <select
                     value={packDraft.confidence}
                     onChange={(event) =>
                       setPackDraft((prev) =>
-                        prev ? { ...prev, confidence: event.target.value as ResearchPackDraft["confidence"] } : prev
+                        prev
+                          ? {
+                              ...prev,
+                              confidence: event.target.value as ResearchPackDraft["confidence"],
+                            }
+                          : prev
                       )
                     }
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputCompact}`}
                   >
                     <option value="">Select</option>
                     <option value="HIGH">High</option>
@@ -374,17 +457,22 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Decision
                   </label>
                   <select
                     value={packDraft.decision}
                     onChange={(event) =>
                       setPackDraft((prev) =>
-                        prev ? { ...prev, decision: event.target.value as ResearchPackDraft["decision"] } : prev
+                        prev
+                          ? {
+                              ...prev,
+                              decision: event.target.value as ResearchPackDraft["decision"],
+                            }
+                          : prev
                       )
                     }
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputCompact}`}
                   >
                     <option value="">Select</option>
                     <option value="YES">Yes</option>
@@ -393,7 +481,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Next catalyst date
                   </label>
                   <input
@@ -404,12 +492,12 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                         prev ? { ...prev, nextCatalystDate: event.target.value } : prev
                       )
                     }
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputCompact}`}
                   />
                 </div>
               </div>
               <div className="mt-3">
-                <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                   Next catalyst note
                 </label>
                 <input
@@ -419,48 +507,50 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                       prev ? { ...prev, nextCatalystNote: event.target.value } : prev
                     )
                   }
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                  className={`mt-2 ${inputBase}`}
                   placeholder="What moves the probability next?"
                 />
               </div>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-slate-300">Loading research pack…</p>
+            <p className="mt-3 text-sm text-[color:var(--ink-muted)]">
+              Loading research pack…
+            </p>
           )}
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">
             Score breakdown
           </h4>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-200">
+          <div className="mt-3 grid grid-cols-1 gap-3 text-sm text-[color:var(--ink-muted)] sm:grid-cols-2">
             {Object.entries(components).map(([key, value]) => (
               <div
                 key={key}
-                className="rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2"
+                className="rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2"
               >
-                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                <div className="text-[11px] font-semibold tracking-[0.08em] text-[color:var(--ink-dim)]">
                   {componentLabelMap[key] ?? key}
                 </div>
-                <div className="mt-1 font-semibold text-slate-100">
+                <div className="mt-1 font-semibold text-[color:var(--ink)]">
                   {Number(value).toFixed(1)}
                 </div>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-slate-300">
+          <p className="mt-3 text-xs text-[color:var(--ink-dim)]">
             {buildScoreSummary(market?.score ?? null)}
           </p>
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">
             Research pack
           </h4>
           {packDraft ? (
-            <div className="mt-3 space-y-3 text-sm text-slate-200">
+            <div className="mt-3 space-y-4 text-sm text-[color:var(--ink-muted)]">
               <div>
-                <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                   Resolution rules (truth table)
                 </label>
                 <textarea
@@ -471,13 +561,13 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                     )
                   }
                   rows={3}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                  className={`mt-2 ${inputBase}`}
                   placeholder="YES conditions, NO conditions, edge cases..."
                 />
               </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Sources (one per line)
                   </label>
                   <textarea
@@ -485,15 +575,15 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                     onChange={(event) =>
                       setPackDraft((prev) =>
                         prev ? { ...prev, sources: event.target.value } : prev
-                      )
-                    }
+                    )
+                  }
                     rows={4}
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputBase}`}
                     placeholder="Primary sources and datasets"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Evidence checklist (one per line)
                   </label>
                   <textarea
@@ -501,15 +591,15 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                     onChange={(event) =>
                       setPackDraft((prev) =>
                         prev ? { ...prev, evidenceChecklist: event.target.value } : prev
-                      )
-                    }
+                    )
+                  }
                     rows={4}
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputBase}`}
                     placeholder="Data points to confirm"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Leading indicators (one per line)
                   </label>
                   <textarea
@@ -517,15 +607,15 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                     onChange={(event) =>
                       setPackDraft((prev) =>
                         prev ? { ...prev, leadingIndicators: event.target.value } : prev
-                      )
-                    }
+                    )
+                  }
                     rows={4}
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputBase}`}
                     placeholder="Indicators to monitor"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                     Key risks (one per line)
                   </label>
                   <textarea
@@ -533,16 +623,16 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                     onChange={(event) =>
                       setPackDraft((prev) =>
                         prev ? { ...prev, keyRisks: event.target.value } : prev
-                      )
-                    }
+                    )
+                  }
                     rows={4}
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-2 ${inputBase}`}
                     placeholder="Model or resolution risks"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                   What moves the market (one per line)
                 </label>
                 <textarea
@@ -550,48 +640,50 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                   onChange={(event) =>
                     setPackDraft((prev) =>
                       prev ? { ...prev, marketDrivers: event.target.value } : prev
-                    )
-                  }
+                  )
+                }
                   rows={3}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                  className={`mt-2 ${inputBase}`}
                   placeholder="Catalysts and market-moving events"
                 />
               </div>
               <button
                 onClick={saveResearchPack}
-                className="rounded-full bg-sky-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950"
+                className={`rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
                 disabled={savingPack}
               >
                 {savingPack ? "Saving…" : "Save research pack"}
               </button>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[color:var(--ink-dim)]">
                 Updates the probability box, sources, indicators, and risks.
               </p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-slate-300">Loading research pack…</p>
+            <p className="mt-3 text-sm text-[color:var(--ink-muted)]">
+              Loading research pack…
+            </p>
           )}
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">
             Score history
           </h4>
-          <div className="mt-2 space-y-2 text-sm text-slate-200">
+          <div className="mt-2 space-y-2 text-sm text-[color:var(--ink-muted)]">
             {scoreHistory.length === 0 ? (
-              <span className="text-sm text-slate-300">No history yet.</span>
+              <span className="text-sm text-[color:var(--ink-dim)]">No history yet.</span>
             ) : (
               scoreHistory.map((entry) => (
                 <div
                   key={`${entry.computedAt}-${entry.totalScore}`}
-                  className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2"
+                  className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2"
                 >
-                  <span className="text-slate-300">
+                  <span className="text-[color:var(--ink-muted)]">
                     {new Date(entry.computedAt).toLocaleString()}
                   </span>
-                  <span className="font-semibold text-slate-100">
+                  <span className="font-semibold text-[color:var(--ink)]">
                     {Math.round(entry.totalScore)}{" "}
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-[color:var(--ink-dim)]">
                       {entry.scoreVersion ? entry.scoreVersion.toUpperCase() : ""}
                     </span>
                   </span>
@@ -602,12 +694,10 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Flags
-          </h4>
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">Flags</h4>
           <div className="mt-2 flex flex-wrap gap-2">
             {(market?.score?.flags ?? []).length === 0 ? (
-              <span className="text-sm text-slate-300">No flags.</span>
+              <span className="text-sm text-[color:var(--ink-dim)]">No flags.</span>
             ) : (
               (market?.score?.flags ?? []).map((flag) => (
                 <span
@@ -622,20 +712,24 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">
             Outcomes
           </h4>
-          <div className="mt-2 space-y-2 text-sm text-slate-200">
+          <div className="mt-2 space-y-2 text-sm text-[color:var(--ink-muted)]">
             {(market?.outcomes ?? []).length === 0 ? (
-              <span className="text-sm text-slate-300">No outcomes available.</span>
+              <span className="text-sm text-[color:var(--ink-dim)]">
+                No outcomes available.
+              </span>
             ) : (
               (market?.outcomes ?? []).map((outcome) => (
                 <div
                   key={outcome.name}
-                  className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2"
+                  className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2"
                 >
-                  <span className="font-medium text-slate-100">{outcome.name}</span>
-                  <span className="text-slate-300">
+                  <span className="font-medium text-[color:var(--ink)]">
+                    {outcome.name}
+                  </span>
+                  <span className="text-[color:var(--ink-muted)]">
                     {formatProbability(outcome.probability ?? null)}
                   </span>
                 </div>
@@ -645,14 +739,12 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Tags
-          </h4>
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">Tags</h4>
           <div className="mt-2 flex flex-wrap gap-2">
             {(market?.tags ?? []).map((tag) => (
               <span
                 key={tag.slug}
-                className="rounded-full border border-white/10 bg-slate-900/70 px-3 py-1 text-xs text-slate-200"
+                className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1 text-xs text-[color:var(--ink)]"
               >
                 {tag.name}
               </span>
@@ -661,16 +753,14 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
         </div>
 
         <div className="mt-6">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Notes
-          </h4>
+          <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">Notes</h4>
           <div className="mt-3 space-y-3">
             <select
               value={draft.state ?? "NEW"}
               onChange={(event) =>
                 setDraft((prev) => ({ ...prev, state: event.target.value }))
               }
-              className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+              className={inputBase}
             >
               <option value="NEW">New</option>
               <option value="ON_DECK">On Deck</option>
@@ -682,7 +772,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
               onChange={(event) =>
                 setDraft((prev) => ({ ...prev, owner: event.target.value }))
               }
-              className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+              className={inputBase}
               placeholder="Owner (optional)"
             />
             <textarea
@@ -691,7 +781,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                 setDraft((prev) => ({ ...prev, notes: event.target.value }))
               }
               rows={4}
-              className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+              className={inputBase}
               placeholder="Add research notes..."
             />
             <div className="flex flex-wrap gap-3">
@@ -700,7 +790,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                   if (!market) return;
                   onUpdateAnnotation(market.id, draft);
                 }}
-                className="rounded-full bg-sky-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950"
+                className={`rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-[color:var(--accent-strong)] ${focusRing}`}
               >
                 Save notes
               </button>
@@ -709,7 +799,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                   href={market.marketUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200"
+                  className={`rounded-full border border-[color:var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink)] transition hover:border-[color:var(--accent-soft)] ${focusRing}`}
                 >
                   Open in Polymarket
                 </a>

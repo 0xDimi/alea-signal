@@ -3,25 +3,82 @@
 @tailwind utilities;
 
 :root {
-  --canvas: #0b1321;
-  --surface: #101a2e;
-  --panel: #131f38;
+  --canvas: #0b111c;
+  --surface: #0f182a;
+  --surface-glass: rgba(15, 24, 42, 0.92);
+  --panel: #121d33;
+  --panel-strong: #16233d;
+  --panel-glass: rgba(18, 29, 51, 0.78);
   --ink: #e6f0ff;
-  --muted: #97b0d6;
-  --accent: #63c6ff;
-  --accent-deep: #2a79d5;
-  --border: #1f2c4b;
+  --ink-strong: #f5f9ff;
+  --ink-muted: #9bb3d9;
+  --ink-dim: #7d93b8;
+  --accent: #6fd2ff;
+  --accent-strong: #46a0ff;
+  --accent-soft: rgba(111, 210, 255, 0.35);
+  --border: rgba(151, 179, 217, 0.16);
+  --border-strong: rgba(151, 179, 217, 0.3);
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --shadow-panel: 0 30px 80px -60px rgba(2, 6, 23, 0.65);
 }
 
 body {
-  background: var(--canvas);
+  background-color: var(--canvas);
+  background-image: radial-gradient(
+      900px 600px at 12% -10%,
+      rgba(90, 170, 255, 0.18),
+      transparent 60%
+    ),
+    radial-gradient(800px 520px at 92% 0%, rgba(56, 189, 248, 0.12), transparent 55%);
   color: var(--ink);
   --font-sans: var(--font-space);
   --font-display: var(--font-fraunces);
   font-family: var(--font-space), ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
   background: rgba(99, 198, 255, 0.25);
+}
+
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+details summary {
+  list-style: none;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
