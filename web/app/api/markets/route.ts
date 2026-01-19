@@ -6,7 +6,15 @@ import { daysToExpiry, memoMode, normalizeTags, tagSlugs } from "@/app/lib/marke
 
 const DEFAULT_SORT = "score";
 
-const sorters = {
+type SortableMarket = {
+  score: number;
+  liquidity: number;
+  volume24h: number;
+  openInterest: number;
+  daysToExpiry: number | null;
+};
+
+const sorters: Record<string, (a: SortableMarket, b: SortableMarket) => number> = {
   score: (a, b) => (a.score ?? 0) - (b.score ?? 0),
   liquidity: (a, b) => a.liquidity - b.liquidity,
   volume24h: (a, b) => a.volume24h - b.volume24h,
