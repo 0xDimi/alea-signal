@@ -22,7 +22,7 @@ const sorters: Record<string, (a: SortableMarket, b: SortableMarket) => number> 
   expiry: (a, b) => (a.daysToExpiry ?? Infinity) - (b.daysToExpiry ?? Infinity),
 };
 
-export const GET = async (request) => {
+export const GET = async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const mode = (searchParams.get("mode") ?? "all").toLowerCase();
   const minScore = Number(searchParams.get("minScore") ?? 0);
