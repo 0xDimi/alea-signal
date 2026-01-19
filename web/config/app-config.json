@@ -77,8 +77,10 @@
   },
   "penalties": {
     "restricted": -10,
-    "missing_tags": -5
+    "missing_tags": -5,
+    "too_short_horizon": -15
   },
+  "min_days_to_expiry": 3,
   "flags_thresholds": {
     "min_liquidity": 5000,
     "min_volume24h": 10000,

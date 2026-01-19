@@ -43,6 +43,14 @@ const parseDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const daysToExpiry = (endDate) => {
+  if (!endDate) return null;
+  const date = endDate instanceof Date ? endDate : new Date(endDate);
+  if (Number.isNaN(date.getTime())) return null;
+  const diffMs = date.getTime() - Date.now();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+};
+
 const normalizeTags = (tags) => {
   if (!Array.isArray(tags)) return [];
   return tags
@@ -170,11 +178,13 @@ const scoreMarket = (market, config, refs) => {
     min_open_interest: 0,
     ...(config.flags_thresholds ?? {}),
   };
+  const minDaysToExpiry = config.min_days_to_expiry ?? 0;
   const flags = [];
 
   const hasResolutionSource = Boolean(market.resolutionSource);
   const hasEndDate = Boolean(market.endDate);
   const tagsPresent = market.tags.length > 0;
+  const days = daysToExpiry(market.endDate);
 
   const resolutionIntegrity =
     weights.resolutionIntegrity *
@@ -222,6 +232,7 @@ const scoreMarket = (market, config, refs) => {
   if (market.liquidity < thresholds.min_liquidity) flags.push("low_liquidity");
   if (market.volume24h < thresholds.min_volume24h) flags.push("low_volume24h");
   if (market.openInterest < thresholds.min_open_interest) flags.push("weak_open_interest");
+  if (days !== null && days < minDaysToExpiry) flags.push("too_short_horizon");
   if (!tagsPresent) flags.push("missing_tags");
   if (market.restricted) flags.push("restricted_market");
   if (tagsPresent && !market.hasAleaTag) flags.push("not_in_alea_sectors");
@@ -229,6 +240,7 @@ const scoreMarket = (market, config, refs) => {
   let penalty = 0;
   if (market.restricted) penalty += penalties.restricted;
   if (!tagsPresent) penalty += penalties.missing_tags;
+  if (days !== null && days < minDaysToExpiry) penalty += penalties.too_short_horizon ?? 0;
 
   const totalScore = clamp(
     resolutionIntegrity +

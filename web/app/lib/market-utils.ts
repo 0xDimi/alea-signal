@@ -40,7 +40,12 @@ export const expiryLabel = (endDate: Date | string | null): string | null => {
   return `${days}d`;
 };
 
-export const memoMode = (days: number | null, memoMaxDays: number): "Memo" | "Thesis" | "Unknown" => {
+export const memoMode = (
+  days: number | null,
+  memoMaxDays: number,
+  minDays = 0
+): "Memo" | "Thesis" | "Unknown" => {
   if (days === null) return "Unknown";
+  if (days < minDays) return "Unknown";
   return days <= memoMaxDays ? "Memo" : "Thesis";
 };

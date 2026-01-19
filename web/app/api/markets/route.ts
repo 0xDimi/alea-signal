@@ -157,11 +157,12 @@ export const GET = async (request: Request) => {
   });
 
   const memoMaxDays = config.memo_max_days ?? 30;
+  const minDaysToExpiry = config.min_days_to_expiry ?? 0;
 
   const hydrated = markets.map((market) => {
     const days = daysToExpiry(market.endDate);
     const expiry = expiryLabel(market.endDate);
-    const modeLabel = memoMode(days, memoMaxDays);
+    const modeLabel = memoMode(days, memoMaxDays, minDaysToExpiry);
     const flags = Array.isArray(market.score?.flags)
       ? market.score.flags.filter((flag) => flag !== "restricted_market")
       : [];
@@ -200,6 +201,13 @@ export const GET = async (request: Request) => {
     if (mode !== "all" && market.mode.toLowerCase() !== mode) return false;
     if (!market.isActive) return false;
     if (market.daysToExpiry !== null && market.daysToExpiry < 0) return false;
+    if (
+      Number.isFinite(minDaysToExpiry) &&
+      market.daysToExpiry !== null &&
+      market.daysToExpiry < minDaysToExpiry
+    ) {
+      return false;
+    }
     if (Number.isFinite(minDays) && market.daysToExpiry !== null && market.daysToExpiry < minDays) {
       return false;
     }

@@ -90,6 +90,7 @@ export const GET = async (
   const { rawPayload, ...payload } = market;
   const days = daysToExpiry(payload.endDate);
   const expiry = expiryLabel(payload.endDate);
+  const minDaysToExpiry = config.min_days_to_expiry ?? 0;
   const openInterest = hasOpenInterest(rawPayload)
     ? payload.openInterest
     : null;
@@ -131,7 +132,7 @@ export const GET = async (
     scoreHistory,
     daysToExpiry: days,
     expiryLabel: expiry,
-    mode: memoMode(days, config.memo_max_days ?? 30),
+    mode: memoMode(days, config.memo_max_days ?? 30, minDaysToExpiry),
     restricted: false,
   });
 };
