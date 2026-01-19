@@ -98,6 +98,17 @@ const isActiveMarket = (payload: unknown) => {
   return marketActive !== false && eventActive !== false;
 };
 
+const buildAllowedTagSet = () => {
+  const allowed = new Set<string>();
+  const sectors = config.allowed_sectors ?? [];
+  const map = config.sector_map ?? {};
+  sectors.forEach((sector) => {
+    const tags = map[sector] ?? [];
+    tags.forEach((tag: string) => allowed.add(String(tag).toLowerCase()));
+  });
+  return allowed;
+};
+
 export const GET = async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const mode = (searchParams.get("mode") ?? "all").toLowerCase();
@@ -112,6 +123,7 @@ export const GET = async (request: Request) => {
     .split(",")
     .map((tag) => tag.trim().toLowerCase())
     .filter(Boolean);
+  const allowedTagSet = buildAllowedTagSet();
 
   const markets: MarketRow[] = await prisma.market.findMany({
     select: {
@@ -161,6 +173,8 @@ export const GET = async (request: Request) => {
       ? market.openInterest
       : null;
     const active = isActiveMarket(market.rawPayload);
+    const slugs = tagSlugs(market.tags);
+    const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
     return {
       ...market,
       daysToExpiry: days,
@@ -170,16 +184,18 @@ export const GET = async (request: Request) => {
       scoreComponents: components,
       flags,
       tags: normalizeTags(market.tags),
-      tagSlugs: tagSlugs(market.tags),
+      tagSlugs: slugs,
       openInterest,
       isActive: active,
       restricted: false,
+      hasAllowedTag,
     };
   });
 
   const filtered = hydrated.filter((market) => {
     if (!includeExcluded && market.isExcluded) return false;
     if (hideRestricted && market.restricted) return false;
+    if (!market.hasAllowedTag) return false;
     if (Number.isFinite(minScore) && market.score < minScore) return false;
     if (mode !== "all" && market.mode.toLowerCase() !== mode) return false;
     if (!market.isActive) return false;
@@ -198,7 +214,7 @@ export const GET = async (request: Request) => {
 
   const sorter = sorters[sort] ?? sorters[DEFAULT_SORT];
   const sorted = [...filtered]
-    .map(({ isActive, rawPayload, ...market }) => market)
+    .map(({ isActive, rawPayload, hasAllowedTag, ...market }) => market)
     .sort(sorter);
   if (order === "desc") sorted.reverse();
 
