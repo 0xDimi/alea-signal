@@ -37,6 +37,7 @@ type MarketRow = {
   volume24h: number;
   openInterest: number;
   tags: unknown;
+  outcomes: unknown;
   restricted: boolean;
   isExcluded: boolean;
   marketUrl: string | null;
@@ -109,6 +110,22 @@ const buildAllowedTagSet = () => {
   return allowed;
 };
 
+const hasLowProbabilityOutcome = (outcomes: unknown, minProbability: number) => {
+  if (!Array.isArray(outcomes) || outcomes.length !== 2) return false;
+  const probabilities = outcomes
+    .map((outcome) => {
+      if (typeof outcome === "number") return outcome;
+      if (!outcome || typeof outcome !== "object") return null;
+      const record = outcome as Record<string, unknown>;
+      const candidate = record.probability ?? record.price ?? record.value;
+      const numeric = Number(candidate);
+      return Number.isFinite(numeric) ? numeric : null;
+    })
+    .filter((value): value is number => Number.isFinite(value));
+  if (probabilities.length < 2) return false;
+  return Math.min(...probabilities) < minProbability;
+};
+
 export const GET = async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const mode = (searchParams.get("mode") ?? "all").toLowerCase();
@@ -119,6 +136,7 @@ export const GET = async (request: Request) => {
   const maxDays = Number(searchParams.get("maxDays") ?? Number.POSITIVE_INFINITY);
   const hideRestricted = searchParams.get("hideRestricted") === "true";
   const includeExcluded = searchParams.get("includeExcluded") === "true";
+  const minOutcomeProbability = config.min_outcome_probability ?? 0.01;
   const tags = (searchParams.get("tags") ?? "")
     .split(",")
     .map((tag) => tag.trim().toLowerCase())
@@ -135,6 +153,7 @@ export const GET = async (request: Request) => {
       volume24h: true,
       openInterest: true,
       tags: true,
+      outcomes: true,
       restricted: true,
       isExcluded: true,
       marketUrl: true,
@@ -174,6 +193,10 @@ export const GET = async (request: Request) => {
       ? market.openInterest
       : null;
     const active = isActiveMarket(market.rawPayload);
+    const lowProbability = hasLowProbabilityOutcome(
+      market.outcomes,
+      minOutcomeProbability
+    );
     const slugs = tagSlugs(market.tags);
     const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
     return {
@@ -190,6 +213,7 @@ export const GET = async (request: Request) => {
       isActive: active,
       restricted: false,
       hasAllowedTag,
+      lowProbability,
     };
   });
 
@@ -197,6 +221,7 @@ export const GET = async (request: Request) => {
     if (!includeExcluded && market.isExcluded) return false;
     if (hideRestricted && market.restricted) return false;
     if (!market.hasAllowedTag) return false;
+    if (market.lowProbability) return false;
     if (Number.isFinite(minScore) && market.score < minScore) return false;
     if (mode !== "all" && market.mode.toLowerCase() !== mode) return false;
     if (!market.isActive) return false;
@@ -222,7 +247,10 @@ export const GET = async (request: Request) => {
 
   const sorter = sorters[sort] ?? sorters[DEFAULT_SORT];
   const sorted = [...filtered]
-    .map(({ isActive, rawPayload, hasAllowedTag, ...market }) => market)
+    .map(
+      ({ isActive, rawPayload, hasAllowedTag, lowProbability, ...market }) =>
+        market
+    )
     .sort(sorter);
   if (order === "desc") sorted.reverse();
 
