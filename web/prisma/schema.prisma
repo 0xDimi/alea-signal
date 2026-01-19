@@ -32,7 +32,9 @@ model Market {
   updatedAt       DateTime    @updatedAt
 
   score           Score?
+  scoreHistory    ScoreHistory[]
   annotation      Annotation?
+  researchPack    ResearchPack?
 }
 
 model Score {
@@ -47,6 +49,32 @@ model Score {
   market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
 }
 
+model ScoreHistory {
+  id           String   @id @default(cuid())
+  marketId     String
+  totalScore   Float
+  components   Json
+  flags        Json
+  scoreVersion String
+  refs         Json
+  computedAt   DateTime @default(now())
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([marketId, computedAt])
+}
+
+model ScoreConfig {
+  id              Int      @id @default(1)
+  weights         Json
+  penalties       Json
+  flagsThresholds Json
+  refPercentile   Float?
+  memoMaxDays     Int?
+  scoreVersion    String?
+  updatedAt       DateTime @updatedAt
+}
+
 model Annotation {
   marketId  String      @id
   state     MarketState @default(NEW)
@@ -54,6 +82,27 @@ model Annotation {
   owner     String?
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+}
+
+model ResearchPack {
+  marketId          String          @id
+  marketProbability Float?
+  aleaProbability   Float?
+  delta             Float?
+  confidence        ConfidenceLevel?
+  decision          ResearchDecision?
+  nextCatalystDate  DateTime?
+  nextCatalystNote  String?
+  resolutionRules   String?
+  sources           Json?
+  evidenceChecklist Json?
+  leadingIndicators Json?
+  keyRisks          Json?
+  marketDrivers     Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
 }
@@ -72,4 +121,16 @@ enum MarketState {
   ON_DECK
   ACTIVE
   ARCHIVE
+}
+
+enum ConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ResearchDecision {
+  YES
+  NO
+  PASS
 }

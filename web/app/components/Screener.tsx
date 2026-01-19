@@ -6,6 +6,14 @@ import { MarketDrawer } from "@/app/components/MarketDrawer";
 
 type TagItem = { slug: string; name: string };
 type Annotation = { state?: string; notes?: string; owner?: string };
+type ScoreConfig = {
+  weights: Record<string, number>;
+  penalties?: Record<string, number>;
+  flagsThresholds?: Record<string, number>;
+  refPercentile?: number;
+  memoMaxDays?: number;
+  scoreVersion?: string;
+};
 
 type MarketRow = {
   id: string;
@@ -90,6 +98,14 @@ const flagLabel = (flag: string) =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
+const scoreWeightLabels: Record<string, string> = {
+  resolutionIntegrity: "Resolution integrity",
+  liquidityMicrostructure: "Liquidity & microstructure",
+  modelability: "Modelability",
+  participationQuality: "Participation quality",
+  strategicFit: "Strategic fit",
+};
+
 export const Screener = () => {
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
@@ -97,6 +113,8 @@ export const Screener = () => {
   const [loading, setLoading] = useState(true);
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState("");
+  const [scoreConfig, setScoreConfig] = useState<ScoreConfig | null>(null);
+  const [savingScoreConfig, setSavingScoreConfig] = useState(false);
 
   const [filters, setFilters] = useState({
     mode: "all",
@@ -135,6 +153,16 @@ export const Screener = () => {
     }
   }, []);
 
+  const fetchScoreConfig = useCallback(async () => {
+    try {
+      const res = await fetch("/api/score-config");
+      const data = await res.json();
+      setScoreConfig(data.config ?? null);
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
+
   const fetchMarkets = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
@@ -160,10 +188,38 @@ export const Screener = () => {
     }
   }, [filters]);
 
+  const saveScoreConfig = async () => {
+    if (!scoreConfig) return;
+    setSavingScoreConfig(true);
+    try {
+      const res = await fetch("/api/score-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weights: scoreConfig.weights,
+          penalties: scoreConfig.penalties,
+          flagsThresholds: scoreConfig.flagsThresholds,
+          refPercentile: scoreConfig.refPercentile,
+          memoMaxDays: scoreConfig.memoMaxDays,
+          scoreVersion: scoreConfig.scoreVersion,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setScoreConfig(data.config ?? scoreConfig);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSavingScoreConfig(false);
+    }
+  };
+
   useEffect(() => {
     fetchTags();
     fetchStatus();
-  }, [fetchTags, fetchStatus]);
+    fetchScoreConfig();
+  }, [fetchTags, fetchStatus, fetchScoreConfig]);
 
   useEffect(() => {
     fetchMarkets();
@@ -397,6 +453,53 @@ export const Screener = () => {
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+                Score tuning (v2)
+              </label>
+              {scoreConfig ? (
+                <div className="mt-3 space-y-3">
+                  {Object.entries(scoreWeightLabels).map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-slate-300">{label}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={scoreConfig.weights?.[key] ?? 0}
+                        onChange={(event) =>
+                          setScoreConfig((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  weights: {
+                                    ...prev.weights,
+                                    [key]: Number(event.target.value),
+                                  },
+                                }
+                              : prev
+                          )
+                        }
+                        className="w-20 rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1 text-xs text-slate-100"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={saveScoreConfig}
+                    className="w-full rounded-full bg-sky-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950"
+                    disabled={savingScoreConfig}
+                  >
+                    {savingScoreConfig ? "Saving…" : "Save weights"}
+                  </button>
+                  <p className="text-xs text-slate-400">
+                    Updated weights apply on the next sync run.
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-slate-400">Loading weights…</p>
+              )}
             </div>
           </div>
         </aside>

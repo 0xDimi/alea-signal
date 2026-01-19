@@ -69,12 +69,11 @@
   "exclude_tags": ["politics", "election", "geopolitics", "government"],
   "ref_percentile": 0.9,
   "weights": {
-    "liquidity": 25,
-    "volume24h": 15,
-    "openInterest": 10,
-    "resolutionSource": 20,
-    "endDate": 10,
-    "fit": 20
+    "resolutionIntegrity": 30,
+    "liquidityMicrostructure": 25,
+    "modelability": 20,
+    "participationQuality": 15,
+    "strategicFit": 10
   },
   "penalties": {
     "restricted": -10,
@@ -85,7 +84,7 @@
     "min_volume24h": 10000,
     "min_open_interest": 5000
   },
-  "score_version": "v1",
+  "score_version": "v2",
   "sync_market_limit": 500,
   "sync_batch_size": 25
 }

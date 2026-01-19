@@ -106,12 +106,29 @@ export const GET = async (
       }
     : null;
 
+  const researchPack = await prisma.researchPack.findUnique({
+    where: { marketId },
+  });
+
+  const scoreHistory = await prisma.scoreHistory.findMany({
+    where: { marketId },
+    orderBy: { computedAt: "desc" },
+    take: 5,
+    select: {
+      totalScore: true,
+      computedAt: true,
+      scoreVersion: true,
+    },
+  });
+
   return NextResponse.json({
     ...payload,
     score,
     openInterest,
     tags: normalizeTags(payload.tags),
     outcomes,
+    researchPack,
+    scoreHistory,
     daysToExpiry: days,
     expiryLabel: expiry,
     mode: memoMode(days, config.memo_max_days ?? 30),

@@ -156,12 +156,11 @@ const buildExcludeTagSet = (config) => {
 
 const scoreMarket = (market, config, refs) => {
   const weights = {
-    liquidity: 25,
-    volume24h: 15,
-    openInterest: 10,
-    resolutionSource: 20,
-    endDate: 10,
-    fit: 20,
+    resolutionIntegrity: 30,
+    liquidityMicrostructure: 25,
+    modelability: 20,
+    participationQuality: 15,
+    strategicFit: 10,
     ...(config.weights ?? {}),
   };
   const penalties = { restricted: -10, missing_tags: -5, ...(config.penalties ?? {}) };
@@ -173,39 +172,70 @@ const scoreMarket = (market, config, refs) => {
   };
   const flags = [];
 
-  const liqScore = logScore(market.liquidity, refs.liquidity, weights.liquidity);
-  const volScore = logScore(market.volume24h, refs.volume24h, weights.volume24h);
-  const oiScore = logScore(market.openInterest, refs.openInterest, weights.openInterest);
-
   const hasResolutionSource = Boolean(market.resolutionSource);
   const hasEndDate = Boolean(market.endDate);
-  const resolutionScore = hasResolutionSource ? weights.resolutionSource : 0;
-  const endDateScore = hasEndDate ? weights.endDate : 0;
+  const tagsPresent = market.tags.length > 0;
+
+  const resolutionIntegrity =
+    weights.resolutionIntegrity *
+    (Number(hasResolutionSource) * 0.6 + Number(hasEndDate) * 0.4);
+
+  const liqScore = logScore(
+    market.liquidity,
+    refs.liquidity,
+    weights.liquidityMicrostructure * 0.6
+  );
+  const volScore = logScore(
+    market.volume24h,
+    refs.volume24h,
+    weights.liquidityMicrostructure * 0.3
+  );
+  const oiScore = logScore(
+    market.openInterest,
+    refs.openInterest,
+    weights.liquidityMicrostructure * 0.1
+  );
+  const liquidityMicrostructure = clamp(
+    liqScore + volScore + oiScore,
+    0,
+    weights.liquidityMicrostructure
+  );
+
+  const modelabilitySignals =
+    (tagsPresent ? 0.5 : 0) + (hasResolutionSource ? 0.3 : 0) + (hasEndDate ? 0.2 : 0);
+  const modelability = weights.modelability * modelabilitySignals;
+
+  const participationValue =
+    market.openInterest > 0 ? market.openInterest : market.volume24h;
+  const participationRef =
+    market.openInterest > 0 ? refs.openInterest : refs.volume24h;
+  const participationQuality = logScore(
+    participationValue,
+    participationRef,
+    weights.participationQuality
+  );
+
+  const strategicFit = market.hasAleaTag ? weights.strategicFit : 0;
 
   if (!hasResolutionSource) flags.push("missing_resolution_source");
   if (!hasEndDate) flags.push("missing_end_date");
   if (market.liquidity < thresholds.min_liquidity) flags.push("low_liquidity");
   if (market.volume24h < thresholds.min_volume24h) flags.push("low_volume24h");
   if (market.openInterest < thresholds.min_open_interest) flags.push("weak_open_interest");
-
-  const tagsPresent = market.tags.length > 0;
   if (!tagsPresent) flags.push("missing_tags");
   if (market.restricted) flags.push("restricted_market");
   if (tagsPresent && !market.hasAleaTag) flags.push("not_in_alea_sectors");
-
-  const fitScore = market.hasAleaTag ? weights.fit : 0;
 
   let penalty = 0;
   if (market.restricted) penalty += penalties.restricted;
   if (!tagsPresent) penalty += penalties.missing_tags;
 
   const totalScore = clamp(
-    liqScore +
-      volScore +
-      oiScore +
-      resolutionScore +
-      endDateScore +
-      fitScore +
+    resolutionIntegrity +
+      liquidityMicrostructure +
+      modelability +
+      participationQuality +
+      strategicFit +
       penalty,
     0,
     100
@@ -214,12 +244,11 @@ const scoreMarket = (market, config, refs) => {
   return {
     totalScore,
     components: {
-      liquidity: liqScore,
-      volume24h: volScore,
-      openInterest: oiScore,
-      resolutionSource: resolutionScore,
-      endDate: endDateScore,
-      fit: fitScore,
+      resolutionIntegrity,
+      liquidityMicrostructure,
+      modelability,
+      participationQuality,
+      strategicFit,
       penalties: penalty,
     },
     flags,
@@ -346,15 +375,41 @@ const createPrismaClient = () => {
   return { prisma, pool };
 };
 
+const mergeScoreConfig = (fileConfig, dbConfig) => {
+  if (!dbConfig) return fileConfig;
+  const merged = { ...fileConfig };
+  if (dbConfig.weights && typeof dbConfig.weights === "object") {
+    merged.weights = dbConfig.weights;
+  }
+  if (dbConfig.penalties && typeof dbConfig.penalties === "object") {
+    merged.penalties = dbConfig.penalties;
+  }
+  if (dbConfig.flagsThresholds && typeof dbConfig.flagsThresholds === "object") {
+    merged.flags_thresholds = dbConfig.flagsThresholds;
+  }
+  if (Number.isFinite(dbConfig.refPercentile)) {
+    merged.ref_percentile = dbConfig.refPercentile;
+  }
+  if (Number.isFinite(dbConfig.memoMaxDays)) {
+    merged.memo_max_days = dbConfig.memoMaxDays;
+  }
+  if (typeof dbConfig.scoreVersion === "string" && dbConfig.scoreVersion) {
+    merged.score_version = dbConfig.scoreVersion;
+  }
+  return merged;
+};
+
 export const runSync = async (options = {}) => {
   const startedAt = new Date();
   const configPath = options.configPath ?? CONFIG_PATH;
   const configRaw = await fs.readFile(configPath, "utf-8");
-  const config = JSON.parse(configRaw);
-  const allowedTags = buildAllowedTagSet(config);
-  const excludeTags = buildExcludeTagSet(config);
+  const fileConfig = JSON.parse(configRaw);
 
   const { prisma, pool } = createPrismaClient();
+  const dbConfig = await prisma.scoreConfig.findUnique({ where: { id: 1 } });
+  const config = mergeScoreConfig(fileConfig, dbConfig);
+  const allowedTags = buildAllowedTagSet(config);
+  const excludeTags = buildExcludeTagSet(config);
 
   await prisma.syncStatus.upsert({
     where: { id: 1 },
@@ -461,7 +516,7 @@ export const runSync = async (options = {}) => {
               totalScore: score.totalScore,
               components: score.components,
               flags: score.flags,
-              scoreVersion: config.score_version ?? "v1",
+              scoreVersion: config.score_version ?? "v2",
               refs,
               computedAt: now,
             },
@@ -470,7 +525,19 @@ export const runSync = async (options = {}) => {
               totalScore: score.totalScore,
               components: score.components,
               flags: score.flags,
-              scoreVersion: config.score_version ?? "v1",
+              scoreVersion: config.score_version ?? "v2",
+              refs,
+              computedAt: now,
+            },
+          });
+
+          await prisma.scoreHistory.create({
+            data: {
+              marketId: market.id,
+              totalScore: score.totalScore,
+              components: score.components,
+              flags: score.flags,
+              scoreVersion: config.score_version ?? "v2",
               refs,
               computedAt: now,
             },
