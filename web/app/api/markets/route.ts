@@ -22,6 +22,30 @@ const sorters: Record<string, (a: SortableMarket, b: SortableMarket) => number> 
   expiry: (a, b) => (a.daysToExpiry ?? Infinity) - (b.daysToExpiry ?? Infinity),
 };
 
+type MarketRow = {
+  id: string;
+  question: string;
+  description: string | null;
+  endDate: Date | null;
+  liquidity: number;
+  volume24h: number;
+  openInterest: number;
+  tags: unknown;
+  restricted: boolean;
+  isExcluded: boolean;
+  marketUrl: string | null;
+  score: {
+    totalScore: number;
+    components: unknown;
+    flags: unknown;
+  } | null;
+  annotation: {
+    state: string;
+    notes: string | null;
+    owner: string | null;
+  } | null;
+};
+
 export const GET = async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const mode = (searchParams.get("mode") ?? "all").toLowerCase();
@@ -37,7 +61,7 @@ export const GET = async (request: Request) => {
     .map((tag) => tag.trim().toLowerCase())
     .filter(Boolean);
 
-  const markets = await prisma.market.findMany({
+  const markets: MarketRow[] = await prisma.market.findMany({
     select: {
       id: true,
       question: true,
