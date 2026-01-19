@@ -3,13 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --canvas: #f6f1e7;
-  --surface: #fff9f0;
-  --ink: #16140f;
-  --muted: #6c6860;
-  --accent: #f25f5c;
-  --accent-deep: #bf3f3c;
-  --border: #e2d7c6;
+  --canvas: #0b1321;
+  --surface: #101a2e;
+  --panel: #131f38;
+  --ink: #e6f0ff;
+  --muted: #97b0d6;
+  --accent: #63c6ff;
+  --accent-deep: #2a79d5;
+  --border: #1f2c4b;
 }
 
 body {
@@ -22,5 +23,5 @@ body {
 }
 
 ::selection {
-  background: rgba(242, 95, 92, 0.25);
+  background: rgba(99, 198, 255, 0.25);
 }

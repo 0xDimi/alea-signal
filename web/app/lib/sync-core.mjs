@@ -64,6 +64,21 @@ const normalizeTags = (tags) => {
     .filter(Boolean);
 };
 
+const normalizeOutcomeName = (value) => {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    if ("name" in value) return String(value.name);
+    if ("title" in value) return String(value.title);
+    if ("outcome" in value) return String(value.outcome);
+  }
+  return null;
+};
+
+const normalizeOutcomePrices = (prices) => {
+  if (!Array.isArray(prices)) return [];
+  return prices.map((price) => safeNumber(price));
+};
+
 const buildMarketUrl = (slug, eventSlug) => {
   if (slug) return `https://polymarket.com/market/${slug}`;
   if (eventSlug) return `https://polymarket.com/event/${eventSlug}`;
@@ -254,11 +269,46 @@ const buildMarketRecord = (market, event, index, config, allowedTags, excludeTag
   const openInterest = pickFirstNumber(
     market?.openInterest,
     market?.open_interest,
+    market?.openInterestUsd,
+    market?.open_interest_usd,
+    market?.openInterestUSD,
     event?.openInterest,
     0
   );
-  const restricted = Boolean(market?.restricted ?? event?.restricted ?? false);
-  const outcomes = market?.outcomes ?? market?.outcomeNames ?? market?.outcome_names ?? null;
+  const restricted = false;
+
+  const outcomeEntries =
+    market?.outcomes ?? market?.outcomeNames ?? market?.outcome_names ?? null;
+  const outcomePricesRaw =
+    market?.outcomePrices ??
+    market?.outcome_prices ??
+    market?.outcomeTokenPrices ??
+    market?.outcome_token_prices ??
+    null;
+  const outcomeList = Array.isArray(outcomeEntries) ? outcomeEntries : [];
+  const outcomeNames = outcomeList.map(normalizeOutcomeName).filter(Boolean);
+  const outcomePrices = normalizeOutcomePrices(outcomePricesRaw);
+  const outcomes = outcomeNames.length
+    ? outcomeList
+        .map((entry, idx) => {
+          const name = normalizeOutcomeName(entry);
+          if (!name) return null;
+          const entryProbability =
+            entry && typeof entry === "object"
+              ? safeNumber(
+                  entry.probability ??
+                    entry.price ??
+                    entry.outcomePrice ??
+                    entry.value
+                )
+              : null;
+          const probability =
+            entryProbability ??
+            (idx < outcomePrices.length ? outcomePrices[idx] : null);
+          return probability === null ? { name } : { name, probability };
+        })
+        .filter(Boolean)
+    : null;
   const outcomesCount = Array.isArray(outcomes) ? outcomes.length : 0;
 
   const hasAleaTag = tagSlugs.some((slugValue) => allowedTags.has(slugValue));

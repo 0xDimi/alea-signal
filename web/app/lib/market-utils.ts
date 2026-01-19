@@ -28,6 +28,18 @@ export const daysToExpiry = (endDate: Date | string | null): number | null => {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 };
 
+export const expiryLabel = (endDate: Date | string | null): string | null => {
+  if (!endDate) return null;
+  const date = typeof endDate === "string" ? new Date(endDate) : endDate;
+  if (Number.isNaN(date.getTime())) return null;
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs < 0) return null;
+  const hours = Math.ceil(diffMs / (1000 * 60 * 60));
+  if (hours < 24) return `${hours}h`;
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return `${days}d`;
+};
+
 export const memoMode = (days: number | null, memoMaxDays: number): "Memo" | "Thesis" | "Unknown" => {
   if (days === null) return "Unknown";
   return days <= memoMaxDays ? "Memo" : "Thesis";

@@ -14,7 +14,7 @@ type MarketRow = {
   endDate?: string | null;
   liquidity: number;
   volume24h: number;
-  openInterest: number;
+  openInterest: number | null;
   tags: TagItem[];
   restricted: boolean;
   isExcluded: boolean;
@@ -23,6 +23,7 @@ type MarketRow = {
   scoreComponents: Record<string, number>;
   flags: string[];
   daysToExpiry: number | null;
+  expiryLabel?: string | null;
   mode: "Memo" | "Thesis" | "Unknown";
   annotation?: Annotation | null;
 };
@@ -40,14 +41,14 @@ const formatCompact = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
-const formatMetric = (value: number) => {
-  if (!Number.isFinite(value)) return "—";
-  return `$${formatCompact.format(value)}`;
+const formatMetric = (value?: number | null) => {
+  if (!Number.isFinite(value ?? NaN)) return "—";
+  return `$${formatCompact.format(value ?? 0)}`;
 };
 
-const formatCount = (value: number) => {
-  if (!Number.isFinite(value)) return "—";
-  return formatCompact.format(value);
+const formatCount = (value?: number | null) => {
+  if (!Number.isFinite(value ?? NaN)) return "—";
+  return formatCompact.format(value ?? 0);
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -63,10 +64,25 @@ const formatDateTime = (value?: string | null) => {
 };
 
 const scoreTone = (score: number) => {
-  if (score >= 80) return "bg-emerald-400/20 text-emerald-950";
-  if (score >= 60) return "bg-amber-400/20 text-amber-950";
-  if (score >= 40) return "bg-orange-400/20 text-orange-950";
-  return "bg-rose-400/20 text-rose-950";
+  if (score >= 80) {
+    const intensity = Math.min(1, Math.max(0, (score - 80) / 20));
+    return {
+      className: "text-emerald-100",
+      style: {
+        backgroundColor: `rgba(16, 185, 129, ${0.18 + intensity * 0.22})`,
+      },
+    };
+  }
+  if (score >= 70) {
+    return { className: "bg-lime-300/20 text-lime-200", style: undefined };
+  }
+  if (score >= 60) {
+    return { className: "bg-amber-300/20 text-amber-200", style: undefined };
+  }
+  if (score >= 50) {
+    return { className: "bg-orange-300/20 text-orange-200", style: undefined };
+  }
+  return { className: "bg-rose-400/20 text-rose-200", style: undefined };
 };
 
 const flagLabel = (flag: string) =>
@@ -89,7 +105,6 @@ export const Screener = () => {
     order: "desc",
     minDays: "",
     maxDays: "",
-    hideRestricted: true,
     includeExcluded: false,
     selectedTags: [] as string[],
   });
@@ -129,7 +144,6 @@ export const Screener = () => {
     params.set("order", filters.order);
     if (filters.minDays !== "") params.set("minDays", filters.minDays);
     if (filters.maxDays !== "") params.set("maxDays", filters.maxDays);
-    if (filters.hideRestricted) params.set("hideRestricted", "true");
     if (filters.includeExcluded) params.set("includeExcluded", "true");
     if (filters.selectedTags.length) {
       params.set("tags", filters.selectedTags.join(","));
@@ -179,33 +193,33 @@ export const Screener = () => {
   return (
     <section className="relative z-10">
       <div className="mb-8 flex flex-wrap items-center gap-3">
-        <div className="rounded-full border border-black/10 bg-white/70 px-4 py-2 text-xs uppercase tracking-[0.2em] text-zinc-600 backdrop-blur">
+        <div className="rounded-full border border-white/10 bg-slate-900/70 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-300 backdrop-blur">
           Alea Signal
         </div>
-        <div className="rounded-full border border-black/10 bg-white/70 px-4 py-2 text-xs uppercase tracking-[0.2em] text-zinc-600 backdrop-blur">
+        <div className="rounded-full border border-white/10 bg-slate-900/70 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-300 backdrop-blur">
           {syncLabel}
         </div>
         {status?.lastError ? (
-          <div className="rounded-full border border-rose-200 bg-rose-100 px-4 py-2 text-xs uppercase tracking-[0.2em] text-rose-700">
+          <div className="rounded-full border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-rose-200">
             Last sync error
           </div>
         ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_80px_-60px_rgba(0,0,0,0.6)] backdrop-blur">
+        <aside className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-[0_20px_80px_-60px_rgba(2,6,23,0.6)] backdrop-blur">
           <div className="mb-6">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
               Filters
             </p>
-            <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-zinc-900">
+            <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-slate-100">
               Research window
             </h2>
           </div>
 
           <div className="space-y-5">
             <div>
-              <label className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+              <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                 Mode
               </label>
               <div className="mt-2 grid grid-cols-3 gap-2">
@@ -221,8 +235,8 @@ export const Screener = () => {
                     }
                     className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                       filters.mode === option.value
-                        ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-black/10 bg-white text-zinc-700 hover:border-zinc-400"
+                        ? "border-sky-400/70 bg-sky-400 text-slate-950"
+                        : "border-white/10 bg-slate-900/60 text-slate-200 hover:border-sky-400/60"
                     }`}
                   >
                     {option.label}
@@ -232,7 +246,7 @@ export const Screener = () => {
             </div>
 
             <div>
-              <label className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+              <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                 Min score
               </label>
               <div className="mt-3 flex items-center gap-3">
@@ -247,9 +261,9 @@ export const Screener = () => {
                       minScore: Number(event.target.value),
                     }))
                   }
-                  className="h-2 w-full accent-zinc-900"
+                  className="h-2 w-full accent-sky-400"
                 />
-                <span className="w-10 text-right text-sm font-semibold text-zinc-900">
+                <span className="w-10 text-right text-sm font-semibold text-slate-100">
                   {filters.minScore}
                 </span>
               </div>
@@ -257,7 +271,7 @@ export const Screener = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+                <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                   Min days
                 </label>
                 <input
@@ -266,12 +280,12 @@ export const Screener = () => {
                   onChange={(event) =>
                     setFilters((prev) => ({ ...prev, minDays: event.target.value }))
                   }
-                  className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
                   placeholder="0"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+                <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                   Max days
                 </label>
                 <input
@@ -280,14 +294,14 @@ export const Screener = () => {
                   onChange={(event) =>
                     setFilters((prev) => ({ ...prev, maxDays: event.target.value }))
                   }
-                  className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
                   placeholder="90"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+              <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                 Sort
               </label>
               <div className="mt-2 grid grid-cols-2 gap-3">
@@ -296,7 +310,7 @@ export const Screener = () => {
                   onChange={(event) =>
                     setFilters((prev) => ({ ...prev, sort: event.target.value }))
                   }
-                  className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
                 >
                   <option value="score">Score</option>
                   <option value="liquidity">Liquidity</option>
@@ -309,7 +323,7 @@ export const Screener = () => {
                   onChange={(event) =>
                     setFilters((prev) => ({ ...prev, order: event.target.value }))
                   }
-                  className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
                 >
                   <option value="desc">Desc</option>
                   <option value="asc">Asc</option>
@@ -318,24 +332,10 @@ export const Screener = () => {
             </div>
 
             <div className="space-y-3">
-              <label className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+              <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                 Visibility
               </label>
-              <label className="flex items-center gap-2 text-sm text-zinc-700">
-                <input
-                  type="checkbox"
-                  checked={filters.hideRestricted}
-                  onChange={(event) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      hideRestricted: event.target.checked,
-                    }))
-                  }
-                  className="h-4 w-4 accent-zinc-900"
-                />
-                Hide restricted markets
-              </label>
-              <label className="flex items-center gap-2 text-sm text-zinc-700">
+              <label className="flex items-center gap-2 text-sm text-slate-200">
                 <input
                   type="checkbox"
                   checked={filters.includeExcluded}
@@ -345,22 +345,33 @@ export const Screener = () => {
                       includeExcluded: event.target.checked,
                     }))
                   }
-                  className="h-4 w-4 accent-zinc-900"
+                  className="h-4 w-4 accent-sky-400"
                 />
                 Include excluded tags
               </label>
             </div>
 
             <div>
-              <label className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+              <label className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                 Tags
               </label>
-              <input
-                value={tagQuery}
-                onChange={(event) => setTagQuery(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900"
-                placeholder="Search tags"
-              />
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  value={tagQuery}
+                  onChange={(event) => setTagQuery(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+                  placeholder="Search tags"
+                />
+                <button
+                  onClick={() => {
+                    setTagQuery("");
+                    setFilters((prev) => ({ ...prev, selectedTags: [] }));
+                  }}
+                  className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-sky-400/60"
+                >
+                  Reset
+                </button>
+              </div>
               <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
                 {filteredTags.map((tag) => {
                   const active = filters.selectedTags.includes(tag.slug);
@@ -377,8 +388,8 @@ export const Screener = () => {
                       }
                       className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
                         active
-                          ? "border-zinc-900 bg-zinc-900 text-white"
-                          : "border-black/10 bg-white text-zinc-700 hover:border-zinc-400"
+                          ? "border-sky-400/70 bg-sky-400 text-slate-950"
+                          : "border-white/10 bg-slate-900/60 text-slate-200 hover:border-sky-400/60"
                       }`}
                     >
                       {tag.name}
@@ -390,21 +401,21 @@ export const Screener = () => {
           </div>
         </aside>
 
-        <div className="rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_80px_-60px_rgba(0,0,0,0.6)] backdrop-blur">
+        <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-[0_20px_80px_-60px_rgba(2,6,23,0.6)] backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                 Market universe
               </p>
-              <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-zinc-900">
+              <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-slate-100">
                 Researchability rankings
               </h2>
-              <p className="mt-2 max-w-xl text-sm text-zinc-600">
+              <p className="mt-2 max-w-xl text-sm text-slate-300">
                 Click a row to see the scoring breakdown, flags, and research
                 notes.
               </p>
             </div>
-            <div className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-zinc-600">
+            <div className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-slate-300">
               {loading ? "Loading markets…" : `${markets.length} markets`}
             </div>
           </div>
@@ -412,7 +423,7 @@ export const Screener = () => {
           <div className="mt-6 overflow-x-auto">
             <table className="w-full min-w-[900px] border-separate border-spacing-y-3 text-sm">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-[0.2em] text-zinc-500">
+                <tr className="text-left text-xs uppercase tracking-[0.2em] text-slate-400">
                   <th className="px-3">Score</th>
                   <th className="px-3">Mode</th>
                   <th className="px-3">Market</th>
@@ -428,13 +439,13 @@ export const Screener = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-zinc-500">
+                    <td colSpan={10} className="px-3 py-8 text-slate-400">
                       Pulling markets…
                     </td>
                   </tr>
                 ) : markets.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-zinc-500">
+                    <td colSpan={10} className="px-3 py-8 text-slate-400">
                       No markets match the current filters.
                     </td>
                   </tr>
@@ -443,33 +454,36 @@ export const Screener = () => {
                     <tr
                       key={market.id}
                       onClick={() => setSelectedMarketId(market.id)}
-                      className="cursor-pointer rounded-2xl border border-transparent bg-white text-zinc-800 shadow-sm transition hover:border-zinc-200 hover:bg-zinc-50"
+                      className="cursor-pointer rounded-2xl border border-transparent bg-slate-900/70 text-slate-100 shadow-sm transition hover:border-slate-700 hover:bg-slate-800/80"
                     >
                       <td className="px-3 py-4">
-                        <span
-                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${scoreTone(
-                            market.score
-                          )}`}
-                          title={Object.entries(market.scoreComponents)
-                            .map(
-                              ([key, value]) =>
-                                `${key}: ${Number(value).toFixed(1)}`
-                            )
-                            .join("\n")}
-                        >
-                          {Math.round(market.score)}
-                        </span>
+                        {(() => {
+                          const tone = scoreTone(market.score);
+                          return (
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${tone.className}`}
+                              style={tone.style}
+                              title={Object.entries(market.scoreComponents)
+                                .map(
+                                  ([key, value]) =>
+                                    `${key}: ${Number(value).toFixed(1)}`
+                                )
+                                .join("\n")}
+                            >
+                              {Math.round(market.score)}
+                            </span>
+                          );
+                        })()}
                       </td>
-                      <td className="px-3 py-4 text-xs uppercase tracking-[0.2em] text-zinc-500">
+                      <td className="px-3 py-4 text-xs uppercase tracking-[0.2em] text-slate-400">
                         {market.mode}
                       </td>
                       <td className="px-3 py-4">
-                        <div className="max-w-xs text-sm font-semibold text-zinc-900">
+                        <div className="max-w-xs text-sm font-semibold text-slate-100">
                           {market.question}
                         </div>
-                        <div className="text-xs text-zinc-500">
-                          {market.restricted ? "Restricted" : "Open"}
-                          {market.isExcluded ? " · Excluded" : ""}
+                        <div className="text-xs text-slate-400">
+                          Active{market.isExcluded ? " · Excluded" : ""}
                         </div>
                       </td>
                       <td className="px-3 py-4">
@@ -477,23 +491,24 @@ export const Screener = () => {
                           {market.tags.slice(0, 3).map((tag) => (
                             <span
                               key={tag.slug}
-                              className="rounded-full border border-black/5 bg-zinc-100 px-2 py-1 text-[11px] text-zinc-700"
+                              className="rounded-full border border-white/10 bg-slate-800/70 px-2 py-1 text-[11px] text-slate-200"
                             >
                               {tag.name}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td className="px-3 py-4 text-sm text-zinc-700">
-                        {market.daysToExpiry !== null ? `${market.daysToExpiry}d` : "—"}
+                      <td className="px-3 py-4 text-sm text-slate-200">
+                        {market.expiryLabel ??
+                          (market.daysToExpiry !== null ? `${market.daysToExpiry}d` : "—")}
                       </td>
-                      <td className="px-3 py-4 text-sm text-zinc-700">
+                      <td className="px-3 py-4 text-sm text-slate-200">
                         {formatMetric(market.liquidity)}
                       </td>
-                      <td className="px-3 py-4 text-sm text-zinc-700">
+                      <td className="px-3 py-4 text-sm text-slate-200">
                         {formatMetric(market.volume24h)}
                       </td>
-                      <td className="px-3 py-4 text-sm text-zinc-700">
+                      <td className="px-3 py-4 text-sm text-slate-200">
                         {formatCount(market.openInterest)}
                       </td>
                       <td className="px-3 py-4">
@@ -501,7 +516,7 @@ export const Screener = () => {
                           {market.flags.slice(0, 2).map((flag) => (
                             <span
                               key={flag}
-                              className="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-700"
+                              className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-200"
                             >
                               {flagLabel(flag)}
                             </span>
@@ -518,7 +533,7 @@ export const Screener = () => {
                             });
                           }}
                           onClick={(event) => event.stopPropagation()}
-                          className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-700"
+                          className="rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200"
                         >
                           <option value="NEW">New</option>
                           <option value="ON_DECK">On Deck</option>

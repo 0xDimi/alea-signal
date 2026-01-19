@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 
 import config from "@/config/app-config.json";
 import { prisma } from "@/app/lib/prisma";
-import { daysToExpiry, memoMode, normalizeTags, tagSlugs } from "@/app/lib/market-utils";
+import {
+  daysToExpiry,
+  expiryLabel,
+  memoMode,
+  normalizeTags,
+  tagSlugs,
+} from "@/app/lib/market-utils";
 
 const DEFAULT_SORT = "score";
 
@@ -10,7 +16,7 @@ type SortableMarket = {
   score: number;
   liquidity: number;
   volume24h: number;
-  openInterest: number;
+  openInterest: number | null;
   daysToExpiry: number | null;
 };
 
@@ -18,7 +24,7 @@ const sorters: Record<string, (a: SortableMarket, b: SortableMarket) => number> 
   score: (a, b) => (a.score ?? 0) - (b.score ?? 0),
   liquidity: (a, b) => a.liquidity - b.liquidity,
   volume24h: (a, b) => a.volume24h - b.volume24h,
-  openInterest: (a, b) => a.openInterest - b.openInterest,
+  openInterest: (a, b) => (a.openInterest ?? 0) - (b.openInterest ?? 0),
   expiry: (a, b) => (a.daysToExpiry ?? Infinity) - (b.daysToExpiry ?? Infinity),
 };
 
@@ -34,6 +40,7 @@ type MarketRow = {
   restricted: boolean;
   isExcluded: boolean;
   marketUrl: string | null;
+  rawPayload: unknown;
   score: {
     totalScore: number;
     components: unknown;
@@ -44,6 +51,51 @@ type MarketRow = {
     notes: string | null;
     owner: string | null;
   } | null;
+};
+
+const hasOwn = (value: unknown, key: string) =>
+  Boolean(
+    value &&
+      typeof value === "object" &&
+      Object.prototype.hasOwnProperty.call(value as Record<string, unknown>, key)
+  );
+
+const hasOpenInterest = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") return false;
+  const raw = payload as { event?: unknown; market?: unknown };
+  const market = raw.market ?? payload;
+  const event = raw.event ?? payload;
+  const keys = [
+    "openInterest",
+    "open_interest",
+    "openInterestUsd",
+    "open_interest_usd",
+    "openInterestUSD",
+  ];
+  return (
+    keys.some((key) => hasOwn(market, key)) || keys.some((key) => hasOwn(event, key))
+  );
+};
+
+const isActiveMarket = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") return true;
+  const raw = payload as { event?: unknown; market?: unknown };
+  const market = raw.market ?? payload;
+  const event = raw.event ?? payload;
+  const closed =
+    (typeof market === "object" && market && "closed" in market && (market as any).closed) ||
+    (typeof event === "object" && event && "closed" in event && (event as any).closed) ||
+    (typeof market === "object" &&
+      market &&
+      "resolved" in market &&
+      (market as any).resolved) ||
+    (typeof event === "object" && event && "resolved" in event && (event as any).resolved);
+  if (closed) return false;
+  const marketActive =
+    typeof market === "object" && market && "active" in market ? (market as any).active : true;
+  const eventActive =
+    typeof event === "object" && event && "active" in event ? (event as any).active : true;
+  return marketActive !== false && eventActive !== false;
 };
 
 export const GET = async (request: Request) => {
@@ -74,6 +126,7 @@ export const GET = async (request: Request) => {
       restricted: true,
       isExcluded: true,
       marketUrl: true,
+      rawPayload: true,
       score: {
         select: {
           totalScore: true,
@@ -95,21 +148,32 @@ export const GET = async (request: Request) => {
 
   const hydrated = markets.map((market) => {
     const days = daysToExpiry(market.endDate);
+    const expiry = expiryLabel(market.endDate);
     const modeLabel = memoMode(days, memoMaxDays);
-    const flags = Array.isArray(market.score?.flags) ? market.score?.flags : [];
+    const flags = Array.isArray(market.score?.flags)
+      ? market.score.flags.filter((flag) => flag !== "restricted_market")
+      : [];
     const components =
       market.score?.components && typeof market.score.components === "object"
         ? market.score.components
         : {};
+    const openInterest = hasOpenInterest(market.rawPayload)
+      ? market.openInterest
+      : null;
+    const active = isActiveMarket(market.rawPayload);
     return {
       ...market,
       daysToExpiry: days,
+      expiryLabel: expiry,
       mode: modeLabel,
       score: market.score?.totalScore ?? 0,
       scoreComponents: components,
       flags,
       tags: normalizeTags(market.tags),
       tagSlugs: tagSlugs(market.tags),
+      openInterest,
+      isActive: active,
+      restricted: false,
     };
   });
 
@@ -118,6 +182,8 @@ export const GET = async (request: Request) => {
     if (hideRestricted && market.restricted) return false;
     if (Number.isFinite(minScore) && market.score < minScore) return false;
     if (mode !== "all" && market.mode.toLowerCase() !== mode) return false;
+    if (!market.isActive) return false;
+    if (market.daysToExpiry !== null && market.daysToExpiry < 0) return false;
     if (Number.isFinite(minDays) && market.daysToExpiry !== null && market.daysToExpiry < minDays) {
       return false;
     }
@@ -131,7 +197,9 @@ export const GET = async (request: Request) => {
   });
 
   const sorter = sorters[sort] ?? sorters[DEFAULT_SORT];
-  const sorted = [...filtered].sort(sorter);
+  const sorted = [...filtered]
+    .map(({ isActive, rawPayload, ...market }) => market)
+    .sort(sorter);
   if (order === "desc") sorted.reverse();
 
   return NextResponse.json({
