@@ -3,8 +3,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeTags } from "@/app/lib/market-utils";
 
+type MarketTagRow = {
+  tags: unknown;
+};
+
 export const GET = async () => {
-  const markets = await prisma.market.findMany({
+  const markets: MarketTagRow[] = await prisma.market.findMany({
     select: { tags: true },
   });
 
