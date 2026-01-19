@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { MarketState } from "@prisma/client";
 
 import { prisma } from "@/app/lib/prisma";
 
-const ALLOWED_STATES = ["NEW", "ON_DECK", "ACTIVE", "ARCHIVE"];
+const ALLOWED_STATES: MarketState[] = ["NEW", "ON_DECK", "ACTIVE", "ARCHIVE"];
 
 export const PATCH = async (
   request: Request,
@@ -14,11 +15,15 @@ export const PATCH = async (
   }
 
   const body = await request.json().catch(() => ({}));
-  const state = body?.state ? String(body.state).toUpperCase() : undefined;
+  const requestedState = body?.state ? String(body.state).toUpperCase() : undefined;
+  const state =
+    requestedState && ALLOWED_STATES.includes(requestedState as MarketState)
+      ? (requestedState as MarketState)
+      : undefined;
   const notes = body?.notes !== undefined ? String(body.notes) : undefined;
   const owner = body?.owner !== undefined ? String(body.owner) : undefined;
 
-  if (state && !ALLOWED_STATES.includes(state)) {
+  if (requestedState && !state) {
     return NextResponse.json({ error: "Invalid state." }, { status: 400 });
   }
 
