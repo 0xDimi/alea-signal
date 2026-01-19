@@ -324,9 +324,28 @@ export const runSync = async (options = {}) => {
       });
     });
 
-    const liquidityValues = markets.map((market) => market.liquidity).filter((v) => v > 0);
-    const volumeValues = markets.map((market) => market.volume24h).filter((v) => v > 0);
-    const oiValues = markets.map((market) => market.openInterest).filter((v) => v > 0);
+    const marketLimit = config.sync_market_limit ?? null;
+    const marketsToProcess =
+      Number.isFinite(marketLimit) && marketLimit > 0 && markets.length > marketLimit
+        ? [...markets]
+            .sort(
+              (a, b) =>
+                b.liquidity - a.liquidity ||
+                b.volume24h - a.volume24h ||
+                b.openInterest - a.openInterest
+            )
+            .slice(0, marketLimit)
+        : markets;
+
+    const liquidityValues = marketsToProcess
+      .map((market) => market.liquidity)
+      .filter((v) => v > 0);
+    const volumeValues = marketsToProcess
+      .map((market) => market.volume24h)
+      .filter((v) => v > 0);
+    const oiValues = marketsToProcess
+      .map((market) => market.openInterest)
+      .filter((v) => v > 0);
 
     const refs = {
       liquidity: percentile(liquidityValues, config.ref_percentile ?? 0.9),
@@ -338,8 +357,8 @@ export const runSync = async (options = {}) => {
     const batchSize = config.sync_batch_size ?? 25;
     let upserted = 0;
 
-    for (let index = 0; index < markets.length; index += batchSize) {
-      const batch = markets.slice(index, index + batchSize);
+    for (let index = 0; index < marketsToProcess.length; index += batchSize) {
+      const batch = marketsToProcess.slice(index, index + batchSize);
       await Promise.all(
         batch.map(async (market) => {
           const score = scoreMarket(market, config, refs);

@@ -64,5 +64,7 @@
     "min_volume24h": 10000,
     "min_open_interest": 5000
   },
-  "score_version": "v1"
+  "score_version": "v1",
+  "sync_market_limit": 500,
+  "sync_batch_size": 25
 }
