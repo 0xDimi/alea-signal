@@ -335,81 +335,86 @@ export const runSync = async (options = {}) => {
     };
 
     const now = new Date();
+    const batchSize = config.sync_batch_size ?? 25;
     let upserted = 0;
 
-    for (const market of markets) {
-      const score = scoreMarket(market, config, refs);
-      await prisma.market.upsert({
-        where: { id: market.id },
-        update: {
-          eventId: market.eventId,
-          slug: market.slug,
-          question: market.question,
-          description: market.description,
-          resolutionSource: market.resolutionSource,
-          endDate: market.endDate,
-          liquidity: market.liquidity,
-          volume24h: market.volume24h,
-          openInterest: market.openInterest,
-          tags: market.tags,
-          outcomes: market.outcomes,
-          isMultiOutcome: market.isMultiOutcome,
-          restricted: market.restricted,
-          marketUrl: market.marketUrl,
-          isExcluded: market.isExcluded,
-          rawPayload: market.rawPayload,
-          lastSeenAt: now,
-        },
-        create: {
-          id: market.id,
-          eventId: market.eventId,
-          slug: market.slug,
-          question: market.question,
-          description: market.description,
-          resolutionSource: market.resolutionSource,
-          endDate: market.endDate,
-          liquidity: market.liquidity,
-          volume24h: market.volume24h,
-          openInterest: market.openInterest,
-          tags: market.tags,
-          outcomes: market.outcomes,
-          isMultiOutcome: market.isMultiOutcome,
-          restricted: market.restricted,
-          marketUrl: market.marketUrl,
-          isExcluded: market.isExcluded,
-          rawPayload: market.rawPayload,
-          lastSeenAt: now,
-        },
-      });
+    for (let index = 0; index < markets.length; index += batchSize) {
+      const batch = markets.slice(index, index + batchSize);
+      await Promise.all(
+        batch.map(async (market) => {
+          const score = scoreMarket(market, config, refs);
+          await prisma.market.upsert({
+            where: { id: market.id },
+            update: {
+              eventId: market.eventId,
+              slug: market.slug,
+              question: market.question,
+              description: market.description,
+              resolutionSource: market.resolutionSource,
+              endDate: market.endDate,
+              liquidity: market.liquidity,
+              volume24h: market.volume24h,
+              openInterest: market.openInterest,
+              tags: market.tags,
+              outcomes: market.outcomes,
+              isMultiOutcome: market.isMultiOutcome,
+              restricted: market.restricted,
+              marketUrl: market.marketUrl,
+              isExcluded: market.isExcluded,
+              rawPayload: market.rawPayload,
+              lastSeenAt: now,
+            },
+            create: {
+              id: market.id,
+              eventId: market.eventId,
+              slug: market.slug,
+              question: market.question,
+              description: market.description,
+              resolutionSource: market.resolutionSource,
+              endDate: market.endDate,
+              liquidity: market.liquidity,
+              volume24h: market.volume24h,
+              openInterest: market.openInterest,
+              tags: market.tags,
+              outcomes: market.outcomes,
+              isMultiOutcome: market.isMultiOutcome,
+              restricted: market.restricted,
+              marketUrl: market.marketUrl,
+              isExcluded: market.isExcluded,
+              rawPayload: market.rawPayload,
+              lastSeenAt: now,
+            },
+          });
 
-      await prisma.score.upsert({
-        where: { marketId: market.id },
-        update: {
-          totalScore: score.totalScore,
-          components: score.components,
-          flags: score.flags,
-          scoreVersion: config.score_version ?? "v1",
-          refs,
-          computedAt: now,
-        },
-        create: {
-          marketId: market.id,
-          totalScore: score.totalScore,
-          components: score.components,
-          flags: score.flags,
-          scoreVersion: config.score_version ?? "v1",
-          refs,
-          computedAt: now,
-        },
-      });
+          await prisma.score.upsert({
+            where: { marketId: market.id },
+            update: {
+              totalScore: score.totalScore,
+              components: score.components,
+              flags: score.flags,
+              scoreVersion: config.score_version ?? "v1",
+              refs,
+              computedAt: now,
+            },
+            create: {
+              marketId: market.id,
+              totalScore: score.totalScore,
+              components: score.components,
+              flags: score.flags,
+              scoreVersion: config.score_version ?? "v1",
+              refs,
+              computedAt: now,
+            },
+          });
 
-      await prisma.annotation.upsert({
-        where: { marketId: market.id },
-        update: {},
-        create: { marketId: market.id },
-      });
-
-      upserted += 1;
+          await prisma.annotation.upsert({
+            where: { marketId: market.id },
+            update: {},
+            create: { marketId: market.id },
+          });
+        })
+      );
+      upserted += batch.length;
     }
 
     await prisma.syncStatus.update({
