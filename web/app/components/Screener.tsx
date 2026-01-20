@@ -113,6 +113,19 @@ const scoreWeightLabels: Record<string, string> = {
   strategicFit: "Strategic fit",
 };
 
+const scoreComponentLabel = (key: string) =>
+  scoreWeightLabels[key] ?? flagLabel(key);
+
+const topScoreComponents = (components: Record<string, number>) =>
+  Object.entries(components ?? {})
+    .filter(([, value]) => Number.isFinite(value))
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .slice(0, 3)
+    .map(([key, value]) => ({
+      label: scoreComponentLabel(key),
+      value: Number(value).toFixed(1),
+    }));
+
 export const Screener = () => {
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
@@ -294,7 +307,7 @@ export const Screener = () => {
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="rounded-[var(--radius-lg)] border border-[color:var(--border)] bg-[color:var(--panel-glass)] p-6 shadow-[var(--shadow-panel)] backdrop-blur">
           <div className="mb-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-dim)]">
+            <p className="text-xs font-semibold text-[color:var(--ink-dim)]">
               Filters
             </p>
             <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-[color:var(--ink-strong)]">
@@ -307,7 +320,7 @@ export const Screener = () => {
               <label className="text-xs font-semibold text-[color:var(--ink-muted)]">
                 Mode
               </label>
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {[
                   { label: "All", value: "all" },
                   { label: "Memo", value: "memo" },
@@ -318,7 +331,7 @@ export const Screener = () => {
                     onClick={() =>
                       setFilters((prev) => ({ ...prev, mode: option.value }))
                     }
-                    className={`rounded-full border px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${focusRing} ${
+                    className={`rounded-full border px-3 py-2.5 text-xs font-semibold transition ${focusRing} ${
                       filters.mode === option.value
                         ? "border-transparent bg-[color:var(--accent)] text-slate-950 shadow-[0_8px_24px_-16px_rgba(125,211,252,0.9)]"
                         : "border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--ink)] hover:border-[color:var(--accent-soft)]"
@@ -368,7 +381,7 @@ export const Screener = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-semibold text-[color:var(--ink-muted)]">
                   Min days
@@ -403,7 +416,7 @@ export const Screener = () => {
               <label className="text-xs font-semibold text-[color:var(--ink-muted)]">
                 Sort
               </label>
-              <div className="mt-2 grid grid-cols-2 gap-3">
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <select
                   value={filters.sort}
                   onChange={(event) =>
@@ -477,7 +490,7 @@ export const Screener = () => {
                     onClick={() =>
                       setFilters((prev) => ({ ...prev, selectedTags: [] }))
                     }
-                    className={`rounded-full border border-transparent bg-[color:var(--accent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-[color:var(--accent-strong)] ${focusRing}`}
+                    className={`rounded-full border border-[color:var(--border)] bg-transparent px-3 py-1 text-[11px] font-semibold text-[color:var(--ink)] transition hover:border-[color:var(--accent-soft)] hover:text-[color:var(--ink-strong)] ${focusRing}`}
                   >
                     Clear all
                   </button>
@@ -498,7 +511,7 @@ export const Screener = () => {
                   onClick={() => {
                     setTagQuery("");
                   }}
-                  className={`rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink)] transition hover:border-[color:var(--accent-soft)] ${focusRing}`}
+                  className={`rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-[11px] font-semibold text-[color:var(--ink)] transition hover:border-[color:var(--accent-soft)] ${focusRing}`}
                 >
                   Clear
                 </button>
@@ -591,7 +604,7 @@ export const Screener = () => {
         <div className="rounded-[var(--radius-lg)] border border-[color:var(--border)] bg-[color:var(--panel-glass)] p-6 shadow-[var(--shadow-panel)] backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-dim)]">
+              <p className="text-xs font-semibold text-[color:var(--ink-dim)]">
                 Market universe
               </p>
               <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-[color:var(--ink-strong)]">
@@ -603,7 +616,7 @@ export const Screener = () => {
               </p>
             </div>
             <div className="rounded-[var(--radius-md)] border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--ink-muted)]">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+              <div className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                 Markets
               </div>
               <div className="mt-1 text-lg font-semibold text-[color:var(--ink)]">
@@ -612,10 +625,180 @@ export const Screener = () => {
             </div>
           </div>
 
-          <div className="mt-6 overflow-x-auto">
+          <div className="mt-6 space-y-3 lg:hidden">
+            {loading ? (
+              Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={`card-skeleton-${index}`}
+                  className="rounded-[var(--radius-md)] border border-[color:var(--border)] bg-[color:var(--panel)] p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-5 w-20 animate-pulse rounded-full bg-[color:var(--panel-strong)]" />
+                    <div className="h-4 w-16 animate-pulse rounded-full bg-[color:var(--panel-strong)]" />
+                  </div>
+                  <div className="mt-4 h-4 w-3/4 animate-pulse rounded-full bg-[color:var(--panel-strong)]" />
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    {Array.from({ length: 4 }).map((__, metricIndex) => (
+                      <div
+                        key={`card-metric-${index}-${metricIndex}`}
+                        className="h-4 w-full animate-pulse rounded-full bg-[color:var(--panel-strong)]"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : markets.length === 0 ? (
+              <div className="rounded-[var(--radius-md)] border border-[color:var(--border)] bg-[color:var(--panel)] p-4 text-sm text-[color:var(--ink-dim)]">
+                No markets match the current filters.
+              </div>
+            ) : (
+              markets.map((market) => {
+                const isSelected = selectedMarketId === market.id;
+                const tagOverflow = Math.max(0, market.tags.length - 2);
+                const flagOverflow = Math.max(0, market.flags.length - 1);
+                const hasMeta = market.restricted || market.isExcluded;
+                const stateLabel = flagLabel(market.annotation?.state ?? "NEW");
+                const tone = scoreTone(market.score);
+
+                return (
+                  <div
+                    key={market.id}
+                    onClick={() => setSelectedMarketId(market.id)}
+                    className={`cursor-pointer rounded-[var(--radius-md)] border p-4 transition ${
+                      isSelected
+                        ? "border-[color:var(--accent-soft)] bg-[color:var(--panel-strong)]"
+                        : "border-[color:var(--border)] bg-[color:var(--panel)] hover:bg-[color:var(--panel-strong)]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${tone.className}`}
+                          style={tone.style}
+                        >
+                          {Math.round(market.score)}
+                        </span>
+                        <span className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                          {market.mode}
+                        </span>
+                      </div>
+                      <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--ink)]">
+                        {stateLabel}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-sm font-semibold text-[color:var(--ink)]">
+                      {market.question}
+                    </div>
+                    {hasMeta ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--ink-dim)]">
+                        {market.restricted ? (
+                          <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
+                            Restricted
+                          </span>
+                        ) : null}
+                        {market.isExcluded ? (
+                          <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-rose-200">
+                            Excluded
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-[11px] text-[color:var(--ink-dim)]">
+                      <div>
+                        <div className="text-[10px] font-semibold text-[color:var(--ink-dim)]">
+                          Expiry
+                        </div>
+                        <div className="mt-1 text-[color:var(--ink)]">
+                          {market.expiryLabel ??
+                            (market.daysToExpiry !== null
+                              ? `${market.daysToExpiry}d`
+                              : "—")}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold text-[color:var(--ink-dim)]">
+                          Liquidity
+                        </div>
+                        <div className="mt-1 text-[color:var(--ink)]">
+                          {formatMetric(market.liquidity)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold text-[color:var(--ink-dim)]">
+                          Volume 24h
+                        </div>
+                        <div className="mt-1 text-[color:var(--ink)]">
+                          {formatMetric(market.volume24h)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold text-[color:var(--ink-dim)]">
+                          Open interest
+                        </div>
+                        <div className="mt-1 text-[color:var(--ink)]">
+                          {formatMetric(market.openInterest)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {market.tags.slice(0, 2).map((tag) => (
+                        <span
+                          key={tag.slug}
+                          className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[11px] text-[color:var(--ink)]"
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                      {tagOverflow > 0 ? (
+                        <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[11px] text-[color:var(--ink-dim)]">
+                          +{tagOverflow}
+                        </span>
+                      ) : null}
+                      {(market.flags ?? []).slice(0, 1).map((flag) => (
+                        <span
+                          key={flag}
+                          className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[11px] text-rose-200"
+                        >
+                          {flagLabel(flag)}
+                        </span>
+                      ))}
+                      {flagOverflow > 0 ? (
+                        <span className="rounded-full border border-rose-400/20 bg-rose-500/5 px-2 py-0.5 text-[11px] text-rose-200">
+                          +{flagOverflow}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3">
+                      <label className="text-[10px] font-semibold text-[color:var(--ink-dim)]">
+                        State
+                      </label>
+                      <select
+                        value={market.annotation?.state ?? "NEW"}
+                        onChange={(event) => {
+                          event.stopPropagation();
+                          updateAnnotation(market.id, {
+                            state: event.target.value,
+                          });
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                        className={`mt-2 w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-[11px] font-semibold text-[color:var(--ink)] ${focusRing}`}
+                      >
+                        <option value="NEW">New</option>
+                        <option value="ON_DECK">On Deck</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="ARCHIVE">Archive</option>
+                      </select>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="mt-6 hidden lg:block overflow-x-auto">
             <table className="w-full min-w-[900px] border-separate border-spacing-y-3 text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                <tr className="text-left text-[11px] font-semibold tracking-[0.08em] text-[color:var(--ink-dim)]">
                   <th className="px-3 text-right">Score</th>
                   <th className="px-3">Mode</th>
                   <th className="px-3">Market</th>
@@ -654,6 +837,7 @@ export const Screener = () => {
                     const tagOverflow = Math.max(0, market.tags.length - 3);
                     const flagOverflow = Math.max(0, market.flags.length - 2);
                     const hasMeta = market.restricted || market.isExcluded;
+                    const topComponents = topScoreComponents(market.scoreComponents);
 
                     return (
                       <tr
@@ -662,26 +846,55 @@ export const Screener = () => {
                         className="group cursor-pointer"
                       >
                         <td className={`${rowCell(isSelected)} text-right tabular-nums`}>
-                          {(() => {
-                            const tone = scoreTone(market.score);
-                            return (
-                              <span
-                                className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${tone.className}`}
-                                style={tone.style}
-                                title={Object.entries(market.scoreComponents)
-                                  .map(
-                                    ([key, value]) =>
-                                      `${key}: ${Number(value).toFixed(1)}`
-                                  )
-                                  .join("\n")}
-                              >
-                                {Math.round(market.score)}
-                              </span>
-                            );
-                          })()}
+                          <div className="relative flex items-center justify-end gap-2 group/score">
+                            {(() => {
+                              const tone = scoreTone(market.score);
+                              return (
+                                <span
+                                  className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${tone.className}`}
+                                  style={tone.style}
+                                >
+                                  {Math.round(market.score)}
+                                </span>
+                              );
+                            })()}
+                            {topComponents.length ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onMouseDown={(event) => event.stopPropagation()}
+                                  className={`flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] text-[10px] font-semibold text-[color:var(--ink)] ${focusRing}`}
+                                  aria-label="Score details"
+                                >
+                                  i
+                                </button>
+                                <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-56 rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] p-3 text-left text-[11px] text-[color:var(--ink-muted)] opacity-0 shadow-[0_18px_40px_-28px_rgba(2,6,23,0.8)] transition group-hover/score:opacity-100 group-focus-within/score:opacity-100">
+                                  <div className="text-[10px] font-semibold text-[color:var(--ink-dim)]">
+                                    Top signals
+                                  </div>
+                                  <ul className="mt-2 space-y-1">
+                                    {topComponents.map((item) => (
+                                      <li
+                                        key={item.label}
+                                        className="flex items-center justify-between gap-3 text-[color:var(--ink)]"
+                                      >
+                                        <span className="text-[color:var(--ink-muted)]">
+                                          {item.label}
+                                        </span>
+                                        <span className="tabular-nums text-[color:var(--ink)]">
+                                          {item.value}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </>
+                            ) : null}
+                          </div>
                         </td>
                         <td
-                          className={`${rowCell(isSelected)} text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-dim)]`}
+                          className={`${rowCell(isSelected)} text-[11px] font-semibold tracking-[0.1em] text-[color:var(--ink-dim)]`}
                         >
                           {market.mode}
                         </td>
@@ -769,7 +982,7 @@ export const Screener = () => {
                               });
                             }}
                             onClick={(event) => event.stopPropagation()}
-                            className={`rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink)] ${focusRing}`}
+                            className={`rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-[11px] font-semibold text-[color:var(--ink)] ${focusRing}`}
                           >
                             <option value="NEW">New</option>
                             <option value="ON_DECK">On Deck</option>

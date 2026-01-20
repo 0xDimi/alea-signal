@@ -70,7 +70,7 @@ type MarketDetail = {
 type Props = {
   marketId: string | null;
   onClose: () => void;
-  onUpdateAnnotation: (marketId: string, payload: Annotation) => void;
+  onUpdateAnnotation: (marketId: string, payload: Annotation) => Promise<void>;
 };
 
 const formatCompact = new Intl.NumberFormat("en-US", {
@@ -141,6 +141,8 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
   const [draft, setDraft] = useState<Annotation>({});
   const [packDraft, setPackDraft] = useState<ResearchPackDraft | null>(null);
   const [savingPack, setSavingPack] = useState(false);
+  const [packSavedAt, setPackSavedAt] = useState<number | null>(null);
+  const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const focusRing =
@@ -153,6 +155,8 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
 
   useEffect(() => {
     if (!marketId) return;
+    setPackSavedAt(null);
+    setNotesSavedAt(null);
     fetch(`/api/markets/${marketId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -188,6 +192,18 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
         console.error(error);
       });
   }, [marketId]);
+
+  useEffect(() => {
+    if (!packSavedAt) return;
+    const timeout = window.setTimeout(() => setPackSavedAt(null), 2500);
+    return () => window.clearTimeout(timeout);
+  }, [packSavedAt]);
+
+  useEffect(() => {
+    if (!notesSavedAt) return;
+    const timeout = window.setTimeout(() => setNotesSavedAt(null), 2500);
+    return () => window.clearTimeout(timeout);
+  }, [notesSavedAt]);
 
   useEffect(() => {
     if (!marketId) return;
@@ -269,10 +285,17 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
       if (res.ok) {
         const data = await res.json();
         setMarket((prev) => (prev ? { ...prev, researchPack: data.researchPack } : prev));
+        setPackSavedAt(Date.now());
       }
     } finally {
       setSavingPack(false);
     }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!market) return;
+    await onUpdateAnnotation(market.id, draft);
+    setNotesSavedAt(Date.now());
   };
 
   return (
@@ -424,7 +447,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
-                    Delta
+                    Delta (Alea - Market)
                   </label>
                   <div
                     className={`mt-2 rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm font-semibold tabular-nums ${deltaTone}`}
@@ -565,95 +588,126 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
                   placeholder="YES conditions, NO conditions, edge cases..."
                 />
               </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div>
-                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
-                    Sources (one per line)
-                  </label>
-                  <textarea
-                    value={packDraft.sources}
-                    onChange={(event) =>
-                      setPackDraft((prev) =>
-                        prev ? { ...prev, sources: event.target.value } : prev
-                    )
-                  }
-                    rows={4}
-                    className={`mt-2 ${inputBase}`}
-                    placeholder="Primary sources and datasets"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
-                    Evidence checklist (one per line)
-                  </label>
-                  <textarea
-                    value={packDraft.evidenceChecklist}
-                    onChange={(event) =>
-                      setPackDraft((prev) =>
-                        prev ? { ...prev, evidenceChecklist: event.target.value } : prev
-                    )
-                  }
-                    rows={4}
-                    className={`mt-2 ${inputBase}`}
-                    placeholder="Data points to confirm"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
-                    Leading indicators (one per line)
-                  </label>
-                  <textarea
-                    value={packDraft.leadingIndicators}
-                    onChange={(event) =>
-                      setPackDraft((prev) =>
-                        prev ? { ...prev, leadingIndicators: event.target.value } : prev
-                    )
-                  }
-                    rows={4}
-                    className={`mt-2 ${inputBase}`}
-                    placeholder="Indicators to monitor"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
-                    Key risks (one per line)
-                  </label>
-                  <textarea
-                    value={packDraft.keyRisks}
-                    onChange={(event) =>
-                      setPackDraft((prev) =>
-                        prev ? { ...prev, keyRisks: event.target.value } : prev
-                    )
-                  }
-                    rows={4}
-                    className={`mt-2 ${inputBase}`}
-                    placeholder="Model or resolution risks"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
-                  What moves the market (one per line)
-                </label>
-                <textarea
-                  value={packDraft.marketDrivers}
-                  onChange={(event) =>
-                    setPackDraft((prev) =>
-                      prev ? { ...prev, marketDrivers: event.target.value } : prev
-                  )
-                }
-                  rows={3}
-                  className={`mt-2 ${inputBase}`}
-                  placeholder="Catalysts and market-moving events"
-                />
-              </div>
-              <button
-                onClick={saveResearchPack}
-                className={`rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
-                disabled={savingPack}
+              <details
+                open
+                className="rounded-[var(--radius-md)] border border-[color:var(--border)] bg-[color:var(--surface)] p-4"
               >
-                {savingPack ? "Saving…" : "Save research pack"}
-              </button>
+                <summary
+                  className={`flex cursor-pointer items-center justify-between text-xs font-semibold text-[color:var(--ink-muted)] ${focusRing}`}
+                >
+                  <span>Sources & evidence</span>
+                  <span className="text-[10px] text-[color:var(--ink-dim)]">Details</span>
+                </summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                      Sources (one per line)
+                    </label>
+                    <textarea
+                      value={packDraft.sources}
+                      onChange={(event) =>
+                        setPackDraft((prev) =>
+                          prev ? { ...prev, sources: event.target.value } : prev
+                      )
+                    }
+                      rows={4}
+                      className={`mt-2 ${inputBase}`}
+                      placeholder="Primary sources and datasets"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                      Evidence checklist (one per line)
+                    </label>
+                    <textarea
+                      value={packDraft.evidenceChecklist}
+                      onChange={(event) =>
+                        setPackDraft((prev) =>
+                          prev ? { ...prev, evidenceChecklist: event.target.value } : prev
+                      )
+                    }
+                      rows={4}
+                      className={`mt-2 ${inputBase}`}
+                      placeholder="Data points to confirm"
+                    />
+                  </div>
+                </div>
+              </details>
+              <details
+                open
+                className="rounded-[var(--radius-md)] border border-[color:var(--border)] bg-[color:var(--surface)] p-4"
+              >
+                <summary
+                  className={`flex cursor-pointer items-center justify-between text-xs font-semibold text-[color:var(--ink-muted)] ${focusRing}`}
+                >
+                  <span>Drivers & risks</span>
+                  <span className="text-[10px] text-[color:var(--ink-dim)]">Details</span>
+                </summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                      Leading indicators (one per line)
+                    </label>
+                    <textarea
+                      value={packDraft.leadingIndicators}
+                      onChange={(event) =>
+                        setPackDraft((prev) =>
+                          prev ? { ...prev, leadingIndicators: event.target.value } : prev
+                      )
+                    }
+                      rows={4}
+                      className={`mt-2 ${inputBase}`}
+                      placeholder="Indicators to monitor"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                      Key risks (one per line)
+                    </label>
+                    <textarea
+                      value={packDraft.keyRisks}
+                      onChange={(event) =>
+                        setPackDraft((prev) =>
+                          prev ? { ...prev, keyRisks: event.target.value } : prev
+                      )
+                    }
+                      rows={4}
+                      className={`mt-2 ${inputBase}`}
+                      placeholder="Model or resolution risks"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                      What moves the market (one per line)
+                    </label>
+                    <textarea
+                      value={packDraft.marketDrivers}
+                      onChange={(event) =>
+                        setPackDraft((prev) =>
+                          prev ? { ...prev, marketDrivers: event.target.value } : prev
+                      )
+                    }
+                      rows={3}
+                      className={`mt-2 ${inputBase}`}
+                      placeholder="Catalysts and market-moving events"
+                    />
+                  </div>
+                </div>
+              </details>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={saveResearchPack}
+                  className={`rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[11px] font-semibold text-slate-950 transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
+                  disabled={savingPack}
+                >
+                  {savingPack ? "Saving…" : "Save research pack"}
+                </button>
+                {packSavedAt ? (
+                  <span className="text-xs font-semibold text-emerald-200">
+                    Saved
+                  </span>
+                ) : null}
+              </div>
               <p className="text-xs text-[color:var(--ink-dim)]">
                 Updates the probability box, sources, indicators, and risks.
               </p>
@@ -784,22 +838,24 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
               className={inputBase}
               placeholder="Add research notes..."
             />
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={() => {
-                  if (!market) return;
-                  onUpdateAnnotation(market.id, draft);
-                }}
-                className={`rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-[color:var(--accent-strong)] ${focusRing}`}
+                onClick={handleSaveNotes}
+                className={`rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[11px] font-semibold text-slate-950 transition hover:bg-[color:var(--accent-strong)] ${focusRing}`}
               >
                 Save notes
               </button>
+              {notesSavedAt ? (
+                <span className="text-xs font-semibold text-emerald-200">
+                  Saved
+                </span>
+              ) : null}
               {market?.marketUrl ? (
                 <a
                   href={market.marketUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className={`rounded-full border border-[color:var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink)] transition hover:border-[color:var(--accent-soft)] ${focusRing}`}
+                  className={`rounded-full border border-[color:var(--border)] px-4 py-2.5 text-[11px] font-semibold text-[color:var(--ink-dim)] transition hover:border-[color:var(--accent-soft)] hover:text-[color:var(--ink)] ${focusRing}`}
                 >
                   Open in Polymarket
                 </a>

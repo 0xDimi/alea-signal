@@ -22,21 +22,22 @@
   --radius-md: 16px;
   --radius-lg: 22px;
   --shadow-panel: 0 30px 80px -60px rgba(2, 6, 23, 0.65);
+  color-scheme: dark;
 }
 
 body {
   background-color: var(--canvas);
   background-image: radial-gradient(
-      900px 600px at 12% -10%,
-      rgba(90, 170, 255, 0.18),
-      transparent 60%
-    ),
-    radial-gradient(800px 520px at 92% 0%, rgba(56, 189, 248, 0.12), transparent 55%);
+    860px 520px at 18% -10%,
+    rgba(90, 170, 255, 0.14),
+    transparent 60%
+  );
   color: var(--ink);
   --font-sans: var(--font-space);
   --font-display: var(--font-fraunces);
   font-family: var(--font-space), ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
+  line-height: 1.5;
   text-rendering: optimizeLegibility;
 }
 

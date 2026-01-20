@@ -7,7 +7,6 @@ export default function Home() {
     <div className="min-h-screen text-[var(--ink)]">
       <div className="relative overflow-hidden">
         <div className="pointer-events-none absolute -left-24 top-8 h-56 w-56 rounded-full bg-[radial-gradient(circle_at_top,#1d4ed8_0%,transparent_70%)] opacity-35 blur-2xl" />
-        <div className="pointer-events-none absolute right-0 top-0 h-72 w-72 rounded-full bg-[radial-gradient(circle_at_top,#38bdf8_0%,transparent_70%)] opacity-25 blur-2xl" />
 
         <main className="relative mx-auto max-w-7xl px-6 pb-20 pt-16 animate-[fade-in_500ms_ease-out]">
           <header className="mb-14 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
