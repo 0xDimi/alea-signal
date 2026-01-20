@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "web/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/sync",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
