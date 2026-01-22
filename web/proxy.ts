@@ -9,7 +9,7 @@ const unauthorized = () =>
     },
   });
 
-export const middleware = (request: NextRequest) => {
+export const proxy = (request: NextRequest) => {
   const { pathname } = request.nextUrl;
   if (pathname === "/api/sync") {
     return NextResponse.next();
