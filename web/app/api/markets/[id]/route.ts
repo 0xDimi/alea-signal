@@ -33,7 +33,9 @@ const hasOpenInterest = (payload: unknown) => {
   );
 };
 
-const normalizeOutcome = (value: unknown) => {
+type NormalizedOutcome = { name: string; probability?: number | null };
+
+const normalizeOutcome = (value: unknown): NormalizedOutcome | null => {
   if (typeof value === "string") return { name: value };
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -160,7 +162,9 @@ export const GET = async (
     ? payload.openInterest
     : null;
   const outcomesRaw = Array.isArray(payload.outcomes)
-    ? payload.outcomes.map(normalizeOutcome).filter(Boolean)
+    ? payload.outcomes
+        .map(normalizeOutcome)
+        .filter((outcome): outcome is NormalizedOutcome => Boolean(outcome))
     : [];
   const minOutcomeProbability = resolveMinOutcomeProbability(
     searchParams,
