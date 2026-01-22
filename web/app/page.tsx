@@ -11,6 +11,15 @@ export default function Home() {
         <main className="relative mx-auto max-w-7xl px-6 pb-20 pt-16 animate-[fade-in_500ms_ease-out]">
           <header className="mb-14 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
             <div>
+              <div className="mb-4 flex items-center gap-3">
+                <Image
+                  src="/alea-logo-white.png"
+                  alt="Alea"
+                  width={96}
+                  height={28}
+                  className="h-7 w-auto opacity-90"
+                />
+              </div>
               <div className="inline-flex items-center gap-3 rounded-full border border-[color:var(--border)] bg-[color:var(--panel-glass)] px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-dim)] backdrop-blur">
                 <Image
                   src="/polymarket-mark.svg"
