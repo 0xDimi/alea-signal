@@ -34,6 +34,12 @@ type MarketRow = {
   expiryLabel?: string | null;
   mode: "Memo" | "Thesis" | "Unknown";
   annotation?: Annotation | null;
+  outcomesSummary?: {
+    total: number;
+    aboveThreshold: number;
+    threshold: number;
+    topOutcome: { name: string | null; probability: number } | null;
+  } | null;
 };
 
 type SyncStatus = {
@@ -52,6 +58,13 @@ const formatCompact = new Intl.NumberFormat("en-US", {
 const formatMetric = (value?: number | null) => {
   if (!Number.isFinite(value ?? NaN)) return "—";
   return `$${formatCompact.format(value ?? 0)}`;
+};
+
+const formatProbability = (value?: number | null) => {
+  if (!Number.isFinite(value ?? NaN)) return "—";
+  const numeric = value ?? 0;
+  const percent = numeric > 1 ? numeric : numeric * 100;
+  return `${percent.toFixed(1)}%`;
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -143,11 +156,13 @@ export const Screener = () => {
     order: "desc",
     minDays: "",
     maxDays: "",
+    minOutcomeProbability: 0.05,
     includeExcluded: false,
     selectedTags: [] as string[],
   });
 
   const clampScore = (value: number) => Math.min(100, Math.max(0, value));
+  const clampProbability = (value: number) => Math.min(1, Math.max(0.01, value));
   const focusRing =
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-soft)] focus-visible:border-transparent";
   const inputBase = `w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2.5 text-sm text-[color:var(--ink)] placeholder:text-[color:var(--ink-dim)] ${focusRing}`;
@@ -163,6 +178,10 @@ export const Screener = () => {
     }`;
   const tableHeadCell =
     "sticky top-0 z-10 bg-[color:var(--panel-glass)] px-3 py-2 text-left text-[12px] font-semibold tracking-[0.06em] text-[color:var(--ink-dim)] backdrop-blur";
+  const minOutcomePercent = Math.max(
+    1,
+    Math.round(filters.minOutcomeProbability * 100)
+  );
 
   const filteredTags = useMemo(() => {
     const q = tagQuery.trim().toLowerCase();
@@ -215,6 +234,7 @@ export const Screener = () => {
     params.set("minScore", String(filters.minScore));
     params.set("sort", filters.sort);
     params.set("order", filters.order);
+    params.set("minOutcomeProbability", String(filters.minOutcomeProbability));
     if (filters.minDays !== "") params.set("minDays", filters.minDays);
     if (filters.maxDays !== "") params.set("maxDays", filters.maxDays);
     if (filters.includeExcluded) params.set("includeExcluded", "true");
@@ -381,6 +401,48 @@ export const Screener = () => {
                 <span>0</span>
                 <span>100</span>
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[color:var(--ink-muted)]">
+                Outcome focus (%)
+              </label>
+              <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={minOutcomePercent}
+                  onChange={(event) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      minOutcomeProbability: clampProbability(
+                        Number(event.target.value) / 100
+                      ),
+                    }))
+                  }
+                  className="h-2 w-full accent-[color:var(--accent)]"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={minOutcomePercent}
+                  onChange={(event) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      minOutcomeProbability: clampProbability(
+                        Number(event.target.value) / 100
+                      ),
+                    }))
+                  }
+                  className={`w-16 rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-2 text-right text-sm text-[color:var(--ink)] ${focusRing}`}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-[color:var(--ink-dim)]">
+                Hides markets where the top outcome is below {minOutcomePercent}%.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -660,6 +722,11 @@ export const Screener = () => {
                 const flagOverflow = Math.max(0, market.flags.length - 1);
                 const hasMeta = market.restricted || market.isExcluded;
                 const stateLabel = flagLabel(market.annotation?.state ?? "NEW");
+                const outcomesSummary = market.outcomesSummary ?? null;
+                const topOutcome = outcomesSummary?.topOutcome ?? null;
+                const thresholdLabel = outcomesSummary
+                  ? formatProbability(outcomesSummary.threshold)
+                  : null;
                 const tone = scoreTone(market.score);
 
                 return (
@@ -691,6 +758,25 @@ export const Screener = () => {
                     <div className="mt-3 text-sm font-semibold text-[color:var(--ink)]">
                       {market.question}
                     </div>
+                    {topOutcome?.name ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--ink-dim)]">
+                        <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
+                          Focus
+                        </span>
+                        <span className="text-[color:var(--ink)]">
+                          {topOutcome.name}
+                        </span>
+                        <span>{formatProbability(topOutcome.probability)}</span>
+                      </div>
+                    ) : null}
+                    {outcomesSummary &&
+                    outcomesSummary.total > outcomesSummary.aboveThreshold &&
+                    thresholdLabel ? (
+                      <div className="mt-1 text-[10px] text-[color:var(--ink-dim)]">
+                        {outcomesSummary.aboveThreshold} of {outcomesSummary.total}{" "}
+                        outcomes ≥ {thresholdLabel}
+                      </div>
+                    ) : null}
                     {hasMeta ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--ink-dim)]">
                         {market.restricted ? (
@@ -798,12 +884,13 @@ export const Screener = () => {
           </div>
 
           <div className="mt-6 hidden lg:block overflow-x-auto">
-            <table className="w-full min-w-[900px] border-separate border-spacing-y-3 text-sm">
+            <table className="w-full min-w-[1040px] border-separate border-spacing-y-3 text-sm">
               <thead>
                 <tr>
                   <th className={`${tableHeadCell} text-right`}>Score</th>
                   <th className={tableHeadCell}>Mode</th>
                   <th className={tableHeadCell}>Market</th>
+                  <th className={tableHeadCell}>Focus outcome</th>
                   <th className={tableHeadCell}>Tags</th>
                   <th className={`${tableHeadCell} text-right`}>Expiry</th>
                   <th className={`${tableHeadCell} text-right`}>Liquidity</th>
@@ -817,7 +904,7 @@ export const Screener = () => {
                 {loading ? (
                   Array.from({ length: 6 }).map((_, index) => (
                     <tr key={`skeleton-${index}`} className="group">
-                      {Array.from({ length: 10 }).map((__, cellIndex) => (
+                      {Array.from({ length: 11 }).map((__, cellIndex) => (
                         <td
                           key={`skeleton-cell-${index}-${cellIndex}`}
                           className={`${rowCellBase} bg-[color:var(--panel)]`}
@@ -829,7 +916,7 @@ export const Screener = () => {
                   ))
                 ) : markets.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-[color:var(--ink-dim)]">
+                    <td colSpan={11} className="px-3 py-8 text-[color:var(--ink-dim)]">
                       No markets match the current filters.
                     </td>
                   </tr>
@@ -840,6 +927,11 @@ export const Screener = () => {
                     const flagOverflow = Math.max(0, market.flags.length - 2);
                     const hasMeta = market.restricted || market.isExcluded;
                     const topComponents = topScoreComponents(market.scoreComponents);
+                    const outcomesSummary = market.outcomesSummary ?? null;
+                    const topOutcome = outcomesSummary?.topOutcome ?? null;
+                    const thresholdLabel = outcomesSummary
+                      ? formatProbability(outcomesSummary.threshold)
+                      : null;
 
                     return (
                       <tr
@@ -918,6 +1010,28 @@ export const Screener = () => {
                               ) : null}
                             </div>
                           ) : null}
+                        </td>
+                        <td className={rowCell(isSelected)}>
+                          {topOutcome?.name ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm font-semibold text-[color:var(--ink)]">
+                                {topOutcome.name}
+                              </span>
+                              <span className="text-[11px] text-[color:var(--ink-dim)]">
+                                {formatProbability(topOutcome.probability)}
+                              </span>
+                              {outcomesSummary &&
+                              outcomesSummary.total > outcomesSummary.aboveThreshold &&
+                              thresholdLabel ? (
+                                <span className="text-[10px] text-[color:var(--ink-dim)]">
+                                  {outcomesSummary.aboveThreshold}/{outcomesSummary.total}{" "}
+                                  ≥ {thresholdLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-[color:var(--ink-dim)]">—</span>
+                          )}
                         </td>
                         <td className={rowCell(isSelected)}>
                           <div className="flex flex-wrap gap-1.5">
@@ -1004,6 +1118,7 @@ export const Screener = () => {
 
       <MarketDrawer
         marketId={selectedMarketId}
+        minOutcomeProbability={filters.minOutcomeProbability}
         onClose={() => setSelectedMarketId(null)}
         onUpdateAnnotation={updateAnnotation}
       />

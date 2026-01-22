@@ -54,10 +54,75 @@ const normalizeOutcome = (value: unknown) => {
   return probability === null ? { name } : { name, probability };
 };
 
+const resolveMinOutcomeProbability = (
+  searchParams: URLSearchParams,
+  fallback: number
+) => {
+  const raw = searchParams.get("minOutcomeProbability");
+  if (!raw) return fallback;
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return fallback;
+  const normalized = numeric > 1 ? numeric / 100 : numeric;
+  return Math.min(1, Math.max(0, normalized));
+};
+
+const normalizeProbability = (value: number) =>
+  Number.isFinite(value) ? (value > 1 ? value / 100 : value) : null;
+
+const summarizeOutcomes = (
+  outcomes: { name: string; probability?: number | null }[],
+  threshold: number
+) => {
+  const normalized = outcomes.map((outcome) => {
+    const probability =
+      typeof outcome.probability === "number" && Number.isFinite(outcome.probability)
+        ? outcome.probability
+        : null;
+    const normalizedProbability =
+      probability === null ? null : normalizeProbability(probability);
+    return { ...outcome, probability, normalizedProbability };
+  });
+
+  const withProbability = normalized.filter(
+    (outcome) => outcome.normalizedProbability !== null
+  );
+  const topOutcome = [...withProbability].sort(
+    (a, b) => (b.normalizedProbability ?? 0) - (a.normalizedProbability ?? 0)
+  )[0];
+
+  const shown = normalized
+    .filter(
+      (outcome) =>
+        outcome.normalizedProbability === null ||
+        (outcome.normalizedProbability ?? 0) >= threshold
+    )
+    .sort((a, b) => {
+      if (a.normalizedProbability === null && b.normalizedProbability === null) return 0;
+      if (a.normalizedProbability === null) return 1;
+      if (b.normalizedProbability === null) return -1;
+      return b.normalizedProbability - a.normalizedProbability;
+    })
+    .map(({ normalizedProbability, ...outcome }) => outcome);
+
+  return {
+    shown,
+    summary: {
+      total: normalized.length,
+      shown: shown.length,
+      hidden: Math.max(0, normalized.length - shown.length),
+      threshold,
+      topOutcome: topOutcome
+        ? { name: topOutcome.name, probability: topOutcome.probability }
+        : null,
+    },
+  };
+};
+
 export const GET = async (
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) => {
+  const { searchParams } = new URL(request.url);
   const { id: marketId } = await params;
   if (!marketId) {
     return NextResponse.json({ error: "Missing market id." }, { status: 400 });
@@ -94,9 +159,14 @@ export const GET = async (
   const openInterest = hasOpenInterest(rawPayload)
     ? payload.openInterest
     : null;
-  const outcomes = Array.isArray(payload.outcomes)
+  const outcomesRaw = Array.isArray(payload.outcomes)
     ? payload.outcomes.map(normalizeOutcome).filter(Boolean)
     : [];
+  const minOutcomeProbability = resolveMinOutcomeProbability(
+    searchParams,
+    config.min_outcome_probability ?? 0.01
+  );
+  const outcomesSummary = summarizeOutcomes(outcomesRaw, minOutcomeProbability);
 
   const score = market.score
     ? {
@@ -127,7 +197,8 @@ export const GET = async (
     score,
     openInterest,
     tags: normalizeTags(payload.tags),
-    outcomes,
+    outcomes: outcomesSummary.shown,
+    outcomesSummary: outcomesSummary.summary,
     researchPack,
     scoreHistory,
     daysToExpiry: days,

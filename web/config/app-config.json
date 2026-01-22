@@ -81,7 +81,7 @@
     "too_short_horizon": -15
   },
   "min_days_to_expiry": 3,
-  "min_outcome_probability": 0.01,
+  "min_outcome_probability": 0.05,
   "flags_thresholds": {
     "min_liquidity": 5000,
     "min_volume24h": 10000,

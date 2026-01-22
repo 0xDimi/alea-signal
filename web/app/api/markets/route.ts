@@ -110,20 +110,83 @@ const buildAllowedTagSet = () => {
   return allowed;
 };
 
-const hasLowProbabilityOutcome = (outcomes: unknown, minProbability: number) => {
-  if (!Array.isArray(outcomes) || outcomes.length !== 2) return false;
-  const probabilities = outcomes
-    .map((outcome) => {
-      if (typeof outcome === "number") return outcome;
-      if (!outcome || typeof outcome !== "object") return null;
-      const record = outcome as Record<string, unknown>;
-      const candidate = record.probability ?? record.price ?? record.value;
-      const numeric = Number(candidate);
-      return Number.isFinite(numeric) ? numeric : null;
-    })
-    .filter((value): value is number => Number.isFinite(value));
-  if (probabilities.length < 2) return false;
-  return Math.min(...probabilities) < minProbability;
+const resolveMinOutcomeProbability = (
+  searchParams: URLSearchParams,
+  fallback: number
+) => {
+  const raw = searchParams.get("minOutcomeProbability");
+  if (!raw) return fallback;
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return fallback;
+  const normalized = numeric > 1 ? numeric / 100 : numeric;
+  return Math.min(1, Math.max(0, normalized));
+};
+
+type OutcomeSummary = {
+  total: number;
+  aboveThreshold: number;
+  maxProbability: number | null;
+  topOutcome: { name: string | null; probability: number } | null;
+};
+
+const normalizeProbability = (value: number) =>
+  Number.isFinite(value) ? (value > 1 ? value / 100 : value) : null;
+
+const normalizeOutcomeProbability = (outcome: unknown) => {
+  if (typeof outcome === "number") {
+    const normalizedProbability = normalizeProbability(outcome);
+    if (normalizedProbability === null) return null;
+    return { name: null, probability: outcome, normalizedProbability };
+  }
+  if (!outcome || typeof outcome !== "object") return null;
+  const record = outcome as Record<string, unknown>;
+  const candidate = record.probability ?? record.price ?? record.value;
+  const numeric = Number(candidate);
+  if (!Number.isFinite(numeric)) return null;
+  const normalizedProbability = normalizeProbability(numeric);
+  if (normalizedProbability === null) return null;
+  const name =
+    typeof record.name === "string"
+      ? record.name
+      : typeof record.title === "string"
+        ? record.title
+        : typeof record.outcome === "string"
+          ? record.outcome
+          : null;
+  return { name, probability: numeric, normalizedProbability };
+};
+
+const summarizeOutcomes = (outcomes: unknown, minProbability: number): OutcomeSummary => {
+  if (!Array.isArray(outcomes) || outcomes.length === 0) {
+    return { total: 0, aboveThreshold: 0, maxProbability: null, topOutcome: null };
+  }
+  const normalized = outcomes
+    .map(normalizeOutcomeProbability)
+    .filter(
+      (
+        value
+      ): value is {
+        name: string | null;
+        probability: number;
+        normalizedProbability: number;
+      } => Boolean(value)
+    );
+  if (!normalized.length) {
+    return { total: 0, aboveThreshold: 0, maxProbability: null, topOutcome: null };
+  }
+  const sorted = [...normalized].sort(
+    (a, b) => b.normalizedProbability - a.normalizedProbability
+  );
+  const top = sorted[0];
+  const aboveThreshold = normalized.filter(
+    (item) => item.normalizedProbability >= minProbability
+  ).length;
+  return {
+    total: normalized.length,
+    aboveThreshold,
+    maxProbability: top.normalizedProbability,
+    topOutcome: { name: top.name ?? null, probability: top.probability },
+  };
 };
 
 export const GET = async (request: Request) => {
@@ -136,7 +199,10 @@ export const GET = async (request: Request) => {
   const maxDays = Number(searchParams.get("maxDays") ?? Number.POSITIVE_INFINITY);
   const hideRestricted = searchParams.get("hideRestricted") === "true";
   const includeExcluded = searchParams.get("includeExcluded") === "true";
-  const minOutcomeProbability = config.min_outcome_probability ?? 0.01;
+  const minOutcomeProbability = resolveMinOutcomeProbability(
+    searchParams,
+    config.min_outcome_probability ?? 0.01
+  );
   const tags = (searchParams.get("tags") ?? "")
     .split(",")
     .map((tag) => tag.trim().toLowerCase())
@@ -193,10 +259,13 @@ export const GET = async (request: Request) => {
       ? market.openInterest
       : null;
     const active = isActiveMarket(market.rawPayload);
-    const lowProbability = hasLowProbabilityOutcome(
+    const outcomesSummary = summarizeOutcomes(
       market.outcomes,
       minOutcomeProbability
     );
+    const lowProbability =
+      outcomesSummary.maxProbability !== null &&
+      outcomesSummary.maxProbability < minOutcomeProbability;
     const slugs = tagSlugs(market.tags);
     const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
     return {
@@ -214,6 +283,12 @@ export const GET = async (request: Request) => {
       restricted: false,
       hasAllowedTag,
       lowProbability,
+      outcomesSummary: {
+        total: outcomesSummary.total,
+        aboveThreshold: outcomesSummary.aboveThreshold,
+        threshold: minOutcomeProbability,
+        topOutcome: outcomesSummary.topOutcome,
+      },
     };
   });
 

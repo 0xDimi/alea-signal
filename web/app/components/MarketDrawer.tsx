@@ -61,6 +61,13 @@ type MarketDetail = {
   marketUrl?: string | null;
   restricted: boolean;
   outcomes?: Outcome[];
+  outcomesSummary?: {
+    total: number;
+    shown: number;
+    hidden: number;
+    threshold: number;
+    topOutcome: Outcome | null;
+  };
   score?: Score | null;
   annotation?: Annotation | null;
   researchPack?: ResearchPack | null;
@@ -69,6 +76,7 @@ type MarketDetail = {
 
 type Props = {
   marketId: string | null;
+  minOutcomeProbability: number;
   onClose: () => void;
   onUpdateAnnotation: (marketId: string, payload: Annotation) => Promise<void>;
 };
@@ -136,7 +144,12 @@ const toNumber = (value: string) => {
   return Number.isFinite(num) ? num : null;
 };
 
-export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) => {
+export const MarketDrawer = ({
+  marketId,
+  minOutcomeProbability,
+  onClose,
+  onUpdateAnnotation,
+}: Props) => {
   const [market, setMarket] = useState<MarketDetail | null>(null);
   const [draft, setDraft] = useState<Annotation>({});
   const [packDraft, setPackDraft] = useState<ResearchPackDraft | null>(null);
@@ -157,7 +170,12 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
     if (!marketId) return;
     setPackSavedAt(null);
     setNotesSavedAt(null);
-    fetch(`/api/markets/${marketId}`)
+    const params = new URLSearchParams();
+    if (Number.isFinite(minOutcomeProbability)) {
+      params.set("minOutcomeProbability", String(minOutcomeProbability));
+    }
+    const suffix = params.toString();
+    fetch(`/api/markets/${marketId}${suffix ? `?${suffix}` : ""}`)
       .then((res) => res.json())
       .then((data) => {
         setMarket(data);
@@ -191,7 +209,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
       .catch((error) => {
         console.error(error);
       });
-  }, [marketId]);
+  }, [marketId, minOutcomeProbability]);
 
   useEffect(() => {
     if (!packSavedAt) return;
@@ -243,6 +261,15 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
 
   const components = market?.score?.components ?? {};
   const scoreHistory = market?.scoreHistory ?? [];
+  const outcomesSummary = market?.outcomesSummary;
+  const topOutcome = outcomesSummary?.topOutcome ?? null;
+  const thresholdLabel = outcomesSummary
+    ? formatProbability(outcomesSummary.threshold)
+    : null;
+  const outcomes = market?.outcomes ?? [];
+  const shownOutcomeCount = outcomesSummary?.shown ?? outcomes.length;
+  const totalOutcomeCount = outcomesSummary?.total ?? outcomes.length;
+  const hiddenOutcomeCount = outcomesSummary?.hidden ?? 0;
   const marketProbabilityValue = toNumber(packDraft?.marketProbability ?? "");
   const aleaProbabilityValue = toNumber(packDraft?.aleaProbability ?? "");
   const deltaValue =
@@ -769,13 +796,36 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
           <h4 className="text-xs font-semibold text-[color:var(--ink-muted)]">
             Outcomes
           </h4>
+          {topOutcome ? (
+            <div className="mt-3 rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
+                Focus outcome
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <span className="font-semibold text-[color:var(--ink)]">
+                  {topOutcome.name}
+                </span>
+                <span className="text-[color:var(--ink-muted)]">
+                  {formatProbability(topOutcome.probability ?? null)}
+                </span>
+              </div>
+            </div>
+          ) : null}
+          {hiddenOutcomeCount > 0 && thresholdLabel ? (
+            <p className="mt-2 text-xs text-[color:var(--ink-dim)]">
+              Showing {shownOutcomeCount} outcomes ≥ {thresholdLabel}.{" "}
+              {hiddenOutcomeCount} below threshold hidden.
+            </p>
+          ) : null}
           <div className="mt-2 space-y-2 text-sm text-[color:var(--ink-muted)]">
-            {(market?.outcomes ?? []).length === 0 ? (
+            {outcomes.length === 0 ? (
               <span className="text-sm text-[color:var(--ink-dim)]">
-                No outcomes available.
+                {hiddenOutcomeCount > 0 && thresholdLabel
+                  ? `All ${totalOutcomeCount} outcomes are below ${thresholdLabel}.`
+                  : "No outcomes available."}
               </span>
             ) : (
-              (market?.outcomes ?? []).map((outcome) => (
+              outcomes.map((outcome) => (
                 <div
                   key={outcome.name}
                   className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2"
