@@ -5,13 +5,13 @@ import { Screener } from "@/app/components/Screener";
 export default function Home() {
   return (
     <div className="min-h-screen text-[var(--ink)]">
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-x-hidden">
         <div className="pointer-events-none absolute -left-24 top-8 h-56 w-56 rounded-full bg-[radial-gradient(circle_at_top,#1d4ed8_0%,transparent_70%)] opacity-35 blur-2xl" />
 
         <main className="relative mx-auto max-w-7xl px-6 pb-20 pt-16 animate-[fade-in_500ms_ease-out]">
           <header className="mb-14 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
             <div>
-              <div className="inline-flex items-center gap-3 rounded-full border border-[color:var(--border)] bg-[color:var(--panel-glass)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--ink-dim)] backdrop-blur">
+              <div className="inline-flex items-center gap-3 rounded-full border border-[color:var(--border)] bg-[color:var(--panel-glass)] px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-dim)] backdrop-blur">
                 <Image
                   src="/polymarket-mark.svg"
                   alt="Polymarket"
@@ -31,7 +31,7 @@ export default function Home() {
               </p>
             </div>
             <div className="rounded-[var(--radius-lg)] border border-[color:var(--border)] bg-[color:var(--panel-glass)] p-6 text-sm text-[color:var(--ink-muted)] shadow-[var(--shadow-panel)] backdrop-blur">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-dim)]">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-dim)]">
                 Workflow
               </p>
               <p className="mt-3 leading-relaxed">

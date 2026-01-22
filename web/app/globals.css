@@ -27,15 +27,17 @@
 
 body {
   background-color: var(--canvas);
-  background-image: radial-gradient(
-    860px 520px at 18% -10%,
-    rgba(90, 170, 255, 0.14),
-    transparent 60%
-  );
+  background-image:
+    radial-gradient(860px 520px at 18% -10%, rgba(90, 170, 255, 0.14), transparent 60%),
+    radial-gradient(720px 520px at 110% 5%, rgba(72, 140, 255, 0.12), transparent 55%),
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: auto, auto, 140px 140px, 140px 140px;
+  background-position: 18% -10%, 110% 5%, 0 0, 0 0;
   color: var(--ink);
-  --font-sans: var(--font-space);
+  --font-sans: var(--font-body);
   --font-display: var(--font-fraunces);
-  font-family: var(--font-space), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
   line-height: 1.5;
   text-rendering: optimizeLegibility;

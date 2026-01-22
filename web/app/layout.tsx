@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Fraunces, Space_Grotesk } from "next/font/google";
+import { Fraunces, Instrument_Sans } from "next/font/google";
 
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space",
+const instrumentSans = Instrument_Sans({
+  variable: "--font-body",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -27,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${spaceGrotesk.variable} ${fraunces.variable} antialiased`}>
+      <body className={`${instrumentSans.variable} ${fraunces.variable} antialiased`}>
         {children}
       </body>
     </html>

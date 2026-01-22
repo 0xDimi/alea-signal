@@ -314,7 +314,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
         <div className="sticky top-0 z-20 -mx-6 mb-8 border-b border-[color:var(--border)] bg-[color:var(--surface-glass)] px-6 pb-6 pt-6 backdrop-blur">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-dim)]">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-dim)]">
                 Market detail
               </p>
               <h3
@@ -351,7 +351,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
             className={`${sectionCard} mt-5 grid grid-cols-1 gap-4 text-sm text-[color:var(--ink-muted)] tabular-nums sm:grid-cols-2`}
           >
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                 Mode
               </div>
               <div className="mt-1 font-semibold text-[color:var(--ink)]">
@@ -359,7 +359,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                 Time to expiry
               </div>
               <div className="mt-1 font-semibold text-[color:var(--ink)]">
@@ -370,7 +370,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                 Liquidity
               </div>
               <div className="mt-1 font-semibold text-[color:var(--ink)]">
@@ -378,7 +378,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                 Volume 24h
               </div>
               <div className="mt-1 font-semibold text-[color:var(--ink)]">
@@ -386,7 +386,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                 Open interest
               </div>
               <div className="mt-1 font-semibold text-[color:var(--ink)]">
@@ -394,7 +394,7 @@ export const MarketDrawer = ({ marketId, onClose, onUpdateAnnotation }: Props) =
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                 Score
               </div>
               <div className="mt-1 font-semibold text-[color:var(--ink)]">

@@ -152,15 +152,17 @@ export const Screener = () => {
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-soft)] focus-visible:border-transparent";
   const inputBase = `w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2.5 text-sm text-[color:var(--ink)] placeholder:text-[color:var(--ink-dim)] ${focusRing}`;
   const badgeClass =
-    "inline-flex items-center rounded-full border border-[color:var(--border)] bg-[color:var(--panel-glass)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-dim)] backdrop-blur";
+    "inline-flex items-center rounded-full border border-[color:var(--border)] bg-[color:var(--panel-glass)] px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-dim)] backdrop-blur";
   const rowCellBase =
     "border-y border-[color:var(--border)] px-3 py-4 transition-colors first:rounded-l-[var(--radius-md)] first:border-l last:rounded-r-[var(--radius-md)] last:border-r";
   const rowCell = (isSelected: boolean) =>
     `${rowCellBase} ${
       isSelected
-        ? "bg-[color:var(--panel-strong)] border-[color:var(--accent-soft)]"
+        ? "bg-[color:var(--panel-strong)] border-[color:var(--accent-strong)] shadow-[0_16px_36px_-28px_rgba(111,210,255,0.6)]"
         : "bg-[color:var(--panel)] group-hover:bg-[color:var(--panel-strong)]"
     }`;
+  const tableHeadCell =
+    "sticky top-0 z-10 bg-[color:var(--panel-glass)] px-3 py-2 text-left text-[12px] font-semibold tracking-[0.06em] text-[color:var(--ink-dim)] backdrop-blur";
 
   const filteredTags = useMemo(() => {
     const q = tagQuery.trim().toLowerCase();
@@ -296,7 +298,7 @@ export const Screener = () => {
         <div className={badgeClass}>{syncLabel}</div>
         {status?.lastError ? (
           <div
-            className="inline-flex items-center rounded-full border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200"
+            className="inline-flex items-center rounded-full border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-rose-200"
             title={status.lastError ?? "Last sync error"}
           >
             Last sync error
@@ -305,7 +307,7 @@ export const Screener = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-[var(--radius-lg)] border border-[color:var(--border)] bg-[color:var(--panel-glass)] p-6 shadow-[var(--shadow-panel)] backdrop-blur">
+        <aside className="rounded-[var(--radius-lg)] border border-[color:var(--border)] bg-[color:var(--panel-glass)] p-6 shadow-[var(--shadow-panel)] backdrop-blur lg:sticky lg:top-8 lg:self-start">
           <div className="mb-6">
             <p className="text-xs font-semibold text-[color:var(--ink-dim)]">
               Filters
@@ -548,7 +550,7 @@ export const Screener = () => {
                 className={`flex cursor-pointer items-center justify-between text-xs font-semibold text-[color:var(--ink-muted)] ${focusRing}`}
               >
                 <span>Score tuning (v2)</span>
-                <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-dim)]">
+                <span className="text-[11px] uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                   Admin
                 </span>
               </summary>
@@ -583,7 +585,7 @@ export const Screener = () => {
                   ))}
                   <button
                     onClick={saveScoreConfig}
-                    className={`w-full rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
+                    className={`w-full rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-950 transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
                     disabled={savingScoreConfig}
                   >
                     {savingScoreConfig ? "Saving…" : "Save weights"}
@@ -666,7 +668,7 @@ export const Screener = () => {
                     onClick={() => setSelectedMarketId(market.id)}
                     className={`cursor-pointer rounded-[var(--radius-md)] border p-4 transition ${
                       isSelected
-                        ? "border-[color:var(--accent-soft)] bg-[color:var(--panel-strong)]"
+                        ? "border-[color:var(--accent-strong)] bg-[color:var(--panel-strong)] shadow-[0_20px_40px_-30px_rgba(111,210,255,0.5)]"
                         : "border-[color:var(--border)] bg-[color:var(--panel)] hover:bg-[color:var(--panel-strong)]"
                     }`}
                   >
@@ -798,17 +800,17 @@ export const Screener = () => {
           <div className="mt-6 hidden lg:block overflow-x-auto">
             <table className="w-full min-w-[900px] border-separate border-spacing-y-3 text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-semibold tracking-[0.08em] text-[color:var(--ink-dim)]">
-                  <th className="px-3 text-right">Score</th>
-                  <th className="px-3">Mode</th>
-                  <th className="px-3">Market</th>
-                  <th className="px-3">Tags</th>
-                  <th className="px-3 text-right">Expiry</th>
-                  <th className="px-3 text-right">Liquidity</th>
-                  <th className="px-3 text-right">Volume 24h</th>
-                  <th className="px-3 text-right">Open interest</th>
-                  <th className="px-3">Flags</th>
-                  <th className="px-3">State</th>
+                <tr>
+                  <th className={`${tableHeadCell} text-right`}>Score</th>
+                  <th className={tableHeadCell}>Mode</th>
+                  <th className={tableHeadCell}>Market</th>
+                  <th className={tableHeadCell}>Tags</th>
+                  <th className={`${tableHeadCell} text-right`}>Expiry</th>
+                  <th className={`${tableHeadCell} text-right`}>Liquidity</th>
+                  <th className={`${tableHeadCell} text-right`}>Volume 24h</th>
+                  <th className={`${tableHeadCell} text-right`}>Open interest</th>
+                  <th className={tableHeadCell}>Flags</th>
+                  <th className={tableHeadCell}>State</th>
                 </tr>
               </thead>
               <tbody>
