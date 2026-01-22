@@ -8,7 +8,7 @@ export default function Home() {
       <div className="relative overflow-x-hidden">
         <div className="pointer-events-none absolute -left-24 top-8 h-56 w-56 rounded-full bg-[radial-gradient(circle_at_top,#1d4ed8_0%,transparent_70%)] opacity-35 blur-2xl" />
 
-        <main className="relative mx-auto max-w-7xl px-6 pb-20 pt-16 animate-[fade-in_500ms_ease-out]">
+        <main className="relative mx-auto w-full max-w-none px-6 pb-20 pt-16 animate-[fade-in_500ms_ease-out]">
           <header className="mb-14 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
             <div>
               <div className="mb-4 flex items-center gap-3">
