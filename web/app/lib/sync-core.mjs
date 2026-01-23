@@ -87,6 +87,11 @@ const normalizeOutcomePrices = (prices) => {
   return prices.map((price) => safeNumber(price));
 };
 
+const hasOwn = (value, key) =>
+  Boolean(value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, key));
+
+const hasAnyField = (value, keys) => keys.some((key) => hasOwn(value, key));
+
 const buildMarketUrl = (slug, eventSlug) => {
   if (slug) return `https://polymarket.com/market/${slug}`;
   if (eventSlug) return `https://polymarket.com/event/${eventSlug}`;
@@ -227,11 +232,23 @@ const scoreMarket = (market, config, refs) => {
 
   const strategicFit = market.hasAleaTag ? weights.strategicFit : 0;
 
-  if (!hasResolutionSource) flags.push("missing_resolution_source");
+  if (market.hasResolutionSourceField && !hasResolutionSource) {
+    flags.push("missing_resolution_source");
+  }
   if (!hasEndDate) flags.push("missing_end_date");
   if (market.liquidity < thresholds.min_liquidity) flags.push("low_liquidity");
-  if (market.volume24h < thresholds.min_volume24h) flags.push("low_volume24h");
-  if (market.openInterest < thresholds.min_open_interest) flags.push("weak_open_interest");
+  if (
+    market.volume24h < thresholds.min_volume24h &&
+    market.liquidity < thresholds.min_liquidity
+  ) {
+    flags.push("low_volume24h");
+  }
+  if (
+    market.hasOpenInterestField &&
+    market.openInterest < thresholds.min_open_interest
+  ) {
+    flags.push("weak_open_interest");
+  }
   if (days !== null && days < minDaysToExpiry) flags.push("too_short_horizon");
   if (!tagsPresent) flags.push("missing_tags");
   if (market.restricted) flags.push("restricted_market");
@@ -317,6 +334,18 @@ const buildMarketRecord = (market, event, index, config, allowedTags, excludeTag
     0
   );
   const restricted = false;
+  const openInterestKeys = [
+    "openInterest",
+    "open_interest",
+    "openInterestUsd",
+    "open_interest_usd",
+    "openInterestUSD",
+  ];
+  const resolutionSourceKeys = ["resolutionSource", "resolution_source"];
+  const hasOpenInterestField =
+    hasAnyField(market, openInterestKeys) || hasAnyField(event, openInterestKeys);
+  const hasResolutionSourceField =
+    hasAnyField(market, resolutionSourceKeys) || hasAnyField(event, resolutionSourceKeys);
 
   const outcomeEntries =
     market?.outcomes ?? market?.outcomeNames ?? market?.outcome_names ?? null;
@@ -374,6 +403,8 @@ const buildMarketRecord = (market, event, index, config, allowedTags, excludeTag
     isExcluded,
     rawPayload: { event: slimEventPayload(event), market },
     hasAleaTag,
+    hasOpenInterestField,
+    hasResolutionSourceField,
   };
 };
 
