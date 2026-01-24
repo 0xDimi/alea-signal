@@ -201,7 +201,7 @@ export const GET = async (
 
     if (!market && snapshotMarket) {
       const { score: snapshotScore, ...rest } = snapshotMarket;
-      market = rest as typeof market;
+      market = rest as MarketRecord;
       score = snapshotScore ?? null;
     }
 
