@@ -36,6 +36,24 @@ const hasOpenInterest = (payload: unknown) => {
 
 type NormalizedOutcome = { name: string; probability?: number | null };
 
+type MarketRecord = {
+  id: string;
+  question: string;
+  description: string | null;
+  endDate: Date | string | null;
+  liquidity: number;
+  volume24h: number;
+  openInterest: number;
+  tags: unknown;
+  outcomes: unknown;
+  restricted: boolean;
+  isExcluded: boolean;
+  marketUrl: string | null;
+  rawPayload?: unknown;
+  annotation?: unknown;
+  score?: unknown;
+};
+
 const normalizeOutcome = (value: unknown): NormalizedOutcome | null => {
   if (typeof value === "string") return { name: value };
   if (!value || typeof value !== "object") return null;
@@ -135,9 +153,7 @@ export const GET = async (
     const snapshot = await loadMarketSnapshot();
     const snapshotMarket = snapshot?.markets?.find((market) => market.id === marketId);
     let prisma: ReturnType<typeof getPrisma> | null = null;
-    let market:
-      | (typeof snapshotMarket & { rawPayload?: unknown; annotation?: unknown; score?: unknown })
-      | null = null;
+    let market: MarketRecord | null = null;
     let rawPayload: unknown = null;
     let annotation: unknown = null;
     let score: unknown = null;
@@ -163,8 +179,9 @@ export const GET = async (
             volume24h: true,
             openInterest: true,
             tags: true,
-            restricted: true,
-            marketUrl: true,
+          restricted: true,
+          isExcluded: true,
+          marketUrl: true,
             outcomes: true,
             rawPayload: true,
             score: true,
