@@ -80,10 +80,15 @@ const hasOpenInterest = (payload: unknown, openInterest: number | null) => {
   );
 };
 
-const isActiveMarket = (payload: unknown, endDate?: Date | null) => {
+const isActiveMarket = (
+  payload: unknown,
+  endDate?: Date | string | null
+) => {
   if (!payload || typeof payload !== "object") {
     if (!endDate) return true;
-    return endDate.getTime() >= Date.now();
+    const date =
+      typeof endDate === "string" ? new Date(endDate) : endDate;
+    return date.getTime() >= Date.now();
   }
   const raw = payload as { event?: unknown; market?: unknown };
   const market = raw.market ?? payload;
