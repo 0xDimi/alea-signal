@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getPrisma } from "@/app/lib/prisma";
+import { loadMarketSnapshot } from "@/app/lib/snapshot";
 import {
   daysToExpiry,
   expiryLabel,
@@ -125,44 +126,86 @@ export const GET = async (
   { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
-    const prisma = getPrisma();
     const { searchParams } = new URL(request.url);
     const { id: marketId } = await params;
     if (!marketId) {
       return NextResponse.json({ error: "Missing market id." }, { status: 400 });
     }
 
-    const market = await prisma.market.findUnique({
-      where: { id: marketId },
-      select: {
-        id: true,
-        question: true,
-        description: true,
-        endDate: true,
-        liquidity: true,
-        volume24h: true,
-        openInterest: true,
-        tags: true,
-        restricted: true,
-        marketUrl: true,
-        outcomes: true,
-        rawPayload: true,
-        score: true,
-        annotation: true,
-      },
-    });
+    const snapshot = await loadMarketSnapshot();
+    const snapshotMarket = snapshot?.markets?.find((market) => market.id === marketId);
+    let prisma: ReturnType<typeof getPrisma> | null = null;
+    let market:
+      | (typeof snapshotMarket & { rawPayload?: unknown; annotation?: unknown; score?: unknown })
+      | null = null;
+    let rawPayload: unknown = null;
+    let annotation: unknown = null;
+    let score: unknown = null;
+    let researchPack: unknown = null;
+    let scoreHistory: unknown = null;
+
+    try {
+      prisma = getPrisma();
+    } catch (error) {
+      prisma = null;
+    }
+
+    if (prisma) {
+      try {
+        const dbMarket = await prisma.market.findUnique({
+          where: { id: marketId },
+          select: {
+            id: true,
+            question: true,
+            description: true,
+            endDate: true,
+            liquidity: true,
+            volume24h: true,
+            openInterest: true,
+            tags: true,
+            restricted: true,
+            marketUrl: true,
+            outcomes: true,
+            rawPayload: true,
+            score: true,
+            annotation: true,
+          },
+        });
+        if (dbMarket) {
+          market = dbMarket;
+          rawPayload = dbMarket.rawPayload;
+          annotation = dbMarket.annotation;
+          score = dbMarket.score;
+        }
+      } catch (error) {
+        prisma = null;
+      }
+    }
+
+    if (!market && snapshotMarket) {
+      const { score: snapshotScore, ...rest } = snapshotMarket;
+      market = rest as typeof market;
+      score = snapshotScore ?? null;
+    }
 
     if (!market) {
       return NextResponse.json({ error: "Market not found." }, { status: 404 });
     }
 
-    const { rawPayload, ...payload } = market;
+    const { rawPayload: rawPayloadField, ...payload } = market;
+    if (rawPayloadField && !rawPayload) {
+      rawPayload = rawPayloadField;
+    }
     const days = daysToExpiry(payload.endDate);
     const expiry = expiryLabel(payload.endDate);
     const minDaysToExpiry = config.min_days_to_expiry ?? 0;
-    const openInterest = hasOpenInterest(rawPayload)
-      ? payload.openInterest
-      : null;
+    const openInterest = rawPayload
+      ? hasOpenInterest(rawPayload)
+        ? payload.openInterest
+        : null
+      : Number.isFinite(payload.openInterest)
+        ? payload.openInterest
+        : null;
     const outcomesRaw = Array.isArray(payload.outcomes)
       ? payload.outcomes
           .map(normalizeOutcome)
@@ -174,37 +217,47 @@ export const GET = async (
     );
     const outcomesSummary = summarizeOutcomes(outcomesRaw, minOutcomeProbability);
 
-    const score = market.score
-      ? {
-          ...market.score,
-          flags: Array.isArray(market.score.flags)
-            ? market.score.flags.filter((flag) => flag !== "restricted_market")
-            : [],
-        }
-      : null;
+    const normalizedScore =
+      score && typeof score === "object"
+        ? {
+            ...(score as Record<string, unknown>),
+            flags: Array.isArray((score as Record<string, unknown>).flags)
+              ? (score as Record<string, unknown>).flags.filter(
+                  (flag) => flag !== "restricted_market"
+                )
+              : [],
+          }
+        : null;
 
-    const researchPack = await prisma.researchPack.findUnique({
-      where: { marketId },
-    });
-
-    const scoreHistory = await prisma.scoreHistory.findMany({
-      where: { marketId },
-      orderBy: { computedAt: "desc" },
-      take: 5,
-      select: {
-        totalScore: true,
-        computedAt: true,
-        scoreVersion: true,
-      },
-    });
+    if (prisma) {
+      try {
+        researchPack = await prisma.researchPack.findUnique({
+          where: { marketId },
+        });
+        scoreHistory = await prisma.scoreHistory.findMany({
+          where: { marketId },
+          orderBy: { computedAt: "desc" },
+          take: 5,
+          select: {
+            totalScore: true,
+            computedAt: true,
+            scoreVersion: true,
+          },
+        });
+      } catch (error) {
+        researchPack = null;
+        scoreHistory = [];
+      }
+    }
 
     return NextResponse.json({
       ...payload,
-      score,
+      score: normalizedScore,
       openInterest,
       tags: normalizeTags(payload.tags),
       outcomes: outcomesSummary.shown,
       outcomesSummary: outcomesSummary.summary,
+      annotation,
       researchPack,
       scoreHistory,
       daysToExpiry: days,
