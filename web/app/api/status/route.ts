@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/app/lib/prisma";
+import { getPrisma } from "@/app/lib/prisma";
 
 export const GET = async () => {
-  const status = await prisma.syncStatus.findUnique({ where: { id: 1 } });
-  return NextResponse.json({ status });
+  try {
+    const prisma = getPrisma();
+    const status = await prisma.syncStatus.findUnique({ where: { id: 1 } });
+    return NextResponse.json({ status });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 };

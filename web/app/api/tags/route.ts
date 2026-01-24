@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import config from "@/config/app-config.json";
-import { prisma } from "@/app/lib/prisma";
+import { getPrisma } from "@/app/lib/prisma";
 import { normalizeTags } from "@/app/lib/market-utils";
 
 type MarketTagRow = {
@@ -20,24 +20,30 @@ const buildAllowedTagSet = () => {
 };
 
 export const GET = async () => {
-  const markets: MarketTagRow[] = await prisma.market.findMany({
-    select: { tags: true },
-  });
-
-  const tagMap = new Map();
-  const allowedTags = buildAllowedTagSet();
-  markets.forEach((market) => {
-    normalizeTags(market.tags).forEach((tag) => {
-      if (!allowedTags.has(tag.slug)) return;
-      if (!tagMap.has(tag.slug)) {
-        tagMap.set(tag.slug, { slug: tag.slug, name: tag.name });
-      }
+  try {
+    const prisma = getPrisma();
+    const markets: MarketTagRow[] = await prisma.market.findMany({
+      select: { tags: true },
     });
-  });
 
-  const tags = Array.from(tagMap.values()).sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+    const tagMap = new Map();
+    const allowedTags = buildAllowedTagSet();
+    markets.forEach((market) => {
+      normalizeTags(market.tags).forEach((tag) => {
+        if (!allowedTags.has(tag.slug)) return;
+        if (!tagMap.has(tag.slug)) {
+          tagMap.set(tag.slug, { slug: tag.slug, name: tag.name });
+        }
+      });
+    });
 
-  return NextResponse.json({ tags });
+    const tags = Array.from(tagMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+
+    return NextResponse.json({ tags });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 };

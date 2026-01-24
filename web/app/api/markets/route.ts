@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import config from "@/config/app-config.json";
-import { prisma } from "@/app/lib/prisma";
+import { getPrisma } from "@/app/lib/prisma";
 import {
   daysToExpiry,
   expiryLabel,
@@ -190,7 +190,9 @@ const summarizeOutcomes = (outcomes: unknown, minProbability: number): OutcomeSu
 };
 
 export const GET = async (request: Request) => {
-  const { searchParams } = new URL(request.url);
+  try {
+    const prisma = getPrisma();
+    const { searchParams } = new URL(request.url);
   const mode = (searchParams.get("mode") ?? "all").toLowerCase();
   const minScore = Number(searchParams.get("minScore") ?? 0);
   const sort = (searchParams.get("sort") ?? DEFAULT_SORT) as keyof typeof sorters;
@@ -329,7 +331,11 @@ export const GET = async (request: Request) => {
     .sort(sorter);
   if (order === "desc") sorted.reverse();
 
-  return NextResponse.json({
-    markets: sorted,
-  });
+    return NextResponse.json({
+      markets: sorted,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 };

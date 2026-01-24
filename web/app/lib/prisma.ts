@@ -10,18 +10,25 @@ const databaseUrl =
   process.env.POSTGRES_URL_NON_POOLING ??
   process.env.NEON_DATABASE_URL;
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL or POSTGRES_URL is not set.");
-}
+const pool = databaseUrl
+  ? globalForPrisma.__pgPool__ ?? new Pool({ connectionString: databaseUrl })
+  : null;
+const adapter = pool ? new PrismaPg(pool) : null;
+const prismaInstance =
+  databaseUrl && adapter
+    ? globalForPrisma.__prisma__ ?? new PrismaClient({ log: ["error"], adapter })
+    : null;
 
-const pool =
-  globalForPrisma.__pgPool__ ?? new Pool({ connectionString: databaseUrl });
-const adapter = new PrismaPg(pool);
+export const prisma = prismaInstance;
 
-export const prisma =
-  globalForPrisma.__prisma__ ?? new PrismaClient({ log: ["error"], adapter });
+export const getPrisma = () => {
+  if (!prismaInstance) {
+    throw new Error("DATABASE_URL or POSTGRES_URL is not set.");
+  }
+  return prismaInstance;
+};
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.__prisma__ = prisma;
+if (process.env.NODE_ENV !== "production" && prismaInstance && pool) {
+  globalForPrisma.__prisma__ = prismaInstance;
   globalForPrisma.__pgPool__ = pool;
 }

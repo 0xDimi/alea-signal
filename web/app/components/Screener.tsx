@@ -139,10 +139,22 @@ const topScoreComponents = (components: Record<string, number>) =>
       value: Number(value).toFixed(1),
     }));
 
+const readErrorMessage = async (res: Response) => {
+  try {
+    const data = await res.json();
+    if (data?.error) return String(data.error);
+  } catch (_error) {
+    // noop: fall back to status text
+  }
+  return `Request failed (${res.status})`;
+};
+
 export const Screener = () => {
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [status, setStatus] = useState<SyncStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [marketsError, setMarketsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState("");
@@ -200,9 +212,17 @@ export const Screener = () => {
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/status");
+      if (!res.ok) {
+        const message = await readErrorMessage(res);
+        setStatusError(message);
+        setStatus(null);
+        return;
+      }
       const data = await res.json();
       setStatus(data.status ?? null);
+      setStatusError(null);
     } catch (error) {
+      setStatusError("Unable to load sync status.");
       console.error(error);
     }
   }, []);
@@ -229,6 +249,7 @@ export const Screener = () => {
 
   const fetchMarkets = useCallback(async () => {
     setLoading(true);
+    setMarketsError(null);
     const params = new URLSearchParams();
     params.set("mode", filters.mode);
     params.set("minScore", String(filters.minScore));
@@ -244,9 +265,16 @@ export const Screener = () => {
 
     try {
       const res = await fetch(`/api/markets?${params.toString()}`);
+      if (!res.ok) {
+        const message = await readErrorMessage(res);
+        setMarketsError(message);
+        setMarkets([]);
+        return;
+      }
       const data = await res.json();
       setMarkets(data.markets ?? []);
     } catch (error) {
+      setMarketsError("Unable to load markets.");
       console.error(error);
     } finally {
       setLoading(false);
@@ -307,15 +335,25 @@ export const Screener = () => {
     );
   };
 
-  const syncLabel = status?.lastSuccessfulSyncAt
-    ? `Synced ${formatDateTime(status.lastSuccessfulSyncAt)}`
-    : "No sync yet";
+  const syncLabel = statusError
+    ? "Sync unavailable"
+    : status?.lastSuccessfulSyncAt
+      ? `Synced ${formatDateTime(status.lastSuccessfulSyncAt)}`
+      : "No sync yet";
 
   return (
     <section className="relative z-10">
       <div className="mb-8 flex flex-wrap items-center gap-3">
         <div className={badgeClass}>Alea Signal</div>
         <div className={badgeClass}>{syncLabel}</div>
+        {statusError ? (
+          <div
+            className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-amber-200"
+            title={statusError}
+          >
+            Status unavailable
+          </div>
+        ) : null}
         {status?.lastError ? (
           <div
             className="inline-flex items-center rounded-full border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-rose-200"
@@ -711,6 +749,10 @@ export const Screener = () => {
                   </div>
                 </div>
               ))
+            ) : marketsError ? (
+              <div className="rounded-[var(--radius-md)] border border-amber-400/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+                Markets unavailable: {marketsError}
+              </div>
             ) : markets.length === 0 ? (
               <div className="rounded-[var(--radius-md)] border border-[color:var(--border)] bg-[color:var(--panel)] p-4 text-sm text-[color:var(--ink-dim)]">
                 No markets match the current filters.
@@ -883,8 +925,13 @@ export const Screener = () => {
             )}
           </div>
 
-          <div className="mt-6 hidden lg:block overflow-x-auto">
-            <table className="w-full min-w-[1040px] border-separate border-spacing-y-3 text-sm">
+          {marketsError ? (
+            <div className="mt-6 hidden rounded-[var(--radius-md)] border border-amber-400/40 bg-amber-500/10 p-4 text-sm text-amber-200 lg:block">
+              Markets unavailable: {marketsError}
+            </div>
+          ) : (
+            <div className="mt-6 hidden lg:block overflow-x-auto">
+              <table className="w-full min-w-[1040px] border-separate border-spacing-y-3 text-sm">
               <thead>
                 <tr>
                   <th className={`${tableHeadCell} text-right`}>Score</th>
@@ -1111,8 +1158,9 @@ export const Screener = () => {
                   })
                 )}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

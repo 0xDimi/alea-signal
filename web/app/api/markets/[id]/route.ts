@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/app/lib/prisma";
+import { getPrisma } from "@/app/lib/prisma";
 import {
   daysToExpiry,
   expiryLabel,
@@ -124,90 +124,96 @@ export const GET = async (
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const { searchParams } = new URL(request.url);
-  const { id: marketId } = await params;
-  if (!marketId) {
-    return NextResponse.json({ error: "Missing market id." }, { status: 400 });
+  try {
+    const prisma = getPrisma();
+    const { searchParams } = new URL(request.url);
+    const { id: marketId } = await params;
+    if (!marketId) {
+      return NextResponse.json({ error: "Missing market id." }, { status: 400 });
+    }
+
+    const market = await prisma.market.findUnique({
+      where: { id: marketId },
+      select: {
+        id: true,
+        question: true,
+        description: true,
+        endDate: true,
+        liquidity: true,
+        volume24h: true,
+        openInterest: true,
+        tags: true,
+        restricted: true,
+        marketUrl: true,
+        outcomes: true,
+        rawPayload: true,
+        score: true,
+        annotation: true,
+      },
+    });
+
+    if (!market) {
+      return NextResponse.json({ error: "Market not found." }, { status: 404 });
+    }
+
+    const { rawPayload, ...payload } = market;
+    const days = daysToExpiry(payload.endDate);
+    const expiry = expiryLabel(payload.endDate);
+    const minDaysToExpiry = config.min_days_to_expiry ?? 0;
+    const openInterest = hasOpenInterest(rawPayload)
+      ? payload.openInterest
+      : null;
+    const outcomesRaw = Array.isArray(payload.outcomes)
+      ? payload.outcomes
+          .map(normalizeOutcome)
+          .filter((outcome): outcome is NormalizedOutcome => Boolean(outcome))
+      : [];
+    const minOutcomeProbability = resolveMinOutcomeProbability(
+      searchParams,
+      config.min_outcome_probability ?? 0.01
+    );
+    const outcomesSummary = summarizeOutcomes(outcomesRaw, minOutcomeProbability);
+
+    const score = market.score
+      ? {
+          ...market.score,
+          flags: Array.isArray(market.score.flags)
+            ? market.score.flags.filter((flag) => flag !== "restricted_market")
+            : [],
+        }
+      : null;
+
+    const researchPack = await prisma.researchPack.findUnique({
+      where: { marketId },
+    });
+
+    const scoreHistory = await prisma.scoreHistory.findMany({
+      where: { marketId },
+      orderBy: { computedAt: "desc" },
+      take: 5,
+      select: {
+        totalScore: true,
+        computedAt: true,
+        scoreVersion: true,
+      },
+    });
+
+    return NextResponse.json({
+      ...payload,
+      score,
+      openInterest,
+      tags: normalizeTags(payload.tags),
+      outcomes: outcomesSummary.shown,
+      outcomesSummary: outcomesSummary.summary,
+      researchPack,
+      scoreHistory,
+      daysToExpiry: days,
+      expiryLabel: expiry,
+      mode: memoMode(days, config.memo_max_days ?? 30, minDaysToExpiry),
+      restricted: false,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const market = await prisma.market.findUnique({
-    where: { id: marketId },
-    select: {
-      id: true,
-      question: true,
-      description: true,
-      endDate: true,
-      liquidity: true,
-      volume24h: true,
-      openInterest: true,
-      tags: true,
-      restricted: true,
-      marketUrl: true,
-      outcomes: true,
-      rawPayload: true,
-      score: true,
-      annotation: true,
-    },
-  });
-
-  if (!market) {
-    return NextResponse.json({ error: "Market not found." }, { status: 404 });
-  }
-
-  const { rawPayload, ...payload } = market;
-  const days = daysToExpiry(payload.endDate);
-  const expiry = expiryLabel(payload.endDate);
-  const minDaysToExpiry = config.min_days_to_expiry ?? 0;
-  const openInterest = hasOpenInterest(rawPayload)
-    ? payload.openInterest
-    : null;
-  const outcomesRaw = Array.isArray(payload.outcomes)
-    ? payload.outcomes
-        .map(normalizeOutcome)
-        .filter((outcome): outcome is NormalizedOutcome => Boolean(outcome))
-    : [];
-  const minOutcomeProbability = resolveMinOutcomeProbability(
-    searchParams,
-    config.min_outcome_probability ?? 0.01
-  );
-  const outcomesSummary = summarizeOutcomes(outcomesRaw, minOutcomeProbability);
-
-  const score = market.score
-    ? {
-        ...market.score,
-        flags: Array.isArray(market.score.flags)
-          ? market.score.flags.filter((flag) => flag !== "restricted_market")
-          : [],
-      }
-    : null;
-
-  const researchPack = await prisma.researchPack.findUnique({
-    where: { marketId },
-  });
-
-  const scoreHistory = await prisma.scoreHistory.findMany({
-    where: { marketId },
-    orderBy: { computedAt: "desc" },
-    take: 5,
-    select: {
-      totalScore: true,
-      computedAt: true,
-      scoreVersion: true,
-    },
-  });
-
-  return NextResponse.json({
-    ...payload,
-    score,
-    openInterest,
-    tags: normalizeTags(payload.tags),
-    outcomes: outcomesSummary.shown,
-    outcomesSummary: outcomesSummary.summary,
-    researchPack,
-    scoreHistory,
-    daysToExpiry: days,
-    expiryLabel: expiry,
-    mode: memoMode(days, config.memo_max_days ?? 30, minDaysToExpiry),
-    restricted: false,
-  });
 };
