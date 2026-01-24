@@ -234,17 +234,15 @@ export const GET = async (
     );
     const outcomesSummary = summarizeOutcomes(outcomesRaw, minOutcomeProbability);
 
-    const normalizedScore =
-      score && typeof score === "object"
-        ? {
-            ...(score as Record<string, unknown>),
-            flags: Array.isArray((score as Record<string, unknown>).flags)
-              ? (score as Record<string, unknown>).flags.filter(
-                  (flag) => flag !== "restricted_market"
-                )
-              : [],
-          }
-        : null;
+    const scoreRecord =
+      score && typeof score === "object" ? (score as Record<string, unknown>) : null;
+    const rawFlags = scoreRecord?.flags;
+    const filteredFlags = Array.isArray(rawFlags)
+      ? rawFlags.filter((flag) => flag !== "restricted_market")
+      : [];
+    const normalizedScore = scoreRecord
+      ? { ...scoreRecord, flags: filteredFlags }
+      : null;
 
     if (prisma) {
       try {
