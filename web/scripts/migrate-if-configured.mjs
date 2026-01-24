@@ -20,4 +20,9 @@ if (!databaseUrl) {
   process.exit(0);
 }
 
-execSync("npx prisma migrate deploy", { stdio: "inherit" });
+try {
+  execSync("npx prisma migrate deploy", { stdio: "inherit" });
+} catch (error) {
+  console.warn("Skipping Prisma migrate: database unavailable.");
+  process.exit(0);
+}
