@@ -41,7 +41,6 @@ type MarketRow = {
   restricted: boolean;
   isExcluded: boolean;
   marketUrl: string | null;
-  rawPayload: unknown;
   score: {
     totalScore: number;
     components: unknown;
@@ -61,8 +60,10 @@ const hasOwn = (value: unknown, key: string) =>
       Object.prototype.hasOwnProperty.call(value as Record<string, unknown>, key)
   );
 
-const hasOpenInterest = (payload: unknown) => {
-  if (!payload || typeof payload !== "object") return false;
+const hasOpenInterest = (payload: unknown, openInterest: number | null) => {
+  if (!payload || typeof payload !== "object") {
+    return openInterest !== null && Number.isFinite(openInterest);
+  }
   const raw = payload as { event?: unknown; market?: unknown };
   const market = raw.market ?? payload;
   const event = raw.event ?? payload;
@@ -78,8 +79,11 @@ const hasOpenInterest = (payload: unknown) => {
   );
 };
 
-const isActiveMarket = (payload: unknown) => {
-  if (!payload || typeof payload !== "object") return true;
+const isActiveMarket = (payload: unknown, endDate?: Date | null) => {
+  if (!payload || typeof payload !== "object") {
+    if (!endDate) return true;
+    return endDate.getTime() >= Date.now();
+  }
   const raw = payload as { event?: unknown; market?: unknown };
   const market = raw.market ?? payload;
   const event = raw.event ?? payload;
@@ -211,28 +215,27 @@ export const GET = async (request: Request) => {
     .filter(Boolean);
   const allowedTagSet = buildAllowedTagSet();
 
-  const markets: MarketRow[] = await prisma.market.findMany({
-    select: {
-      id: true,
-      question: true,
-      description: true,
-      endDate: true,
-      liquidity: true,
-      volume24h: true,
-      openInterest: true,
-      tags: true,
-      outcomes: true,
-      restricted: true,
-      isExcluded: true,
-      marketUrl: true,
-      rawPayload: true,
-      score: {
-        select: {
-          totalScore: true,
-          components: true,
-          flags: true,
+    const markets: MarketRow[] = await prisma.market.findMany({
+      select: {
+        id: true,
+        question: true,
+        description: true,
+        endDate: true,
+        liquidity: true,
+        volume24h: true,
+        openInterest: true,
+        tags: true,
+        outcomes: true,
+        restricted: true,
+        isExcluded: true,
+        marketUrl: true,
+        score: {
+          select: {
+            totalScore: true,
+            components: true,
+            flags: true,
+          },
         },
-      },
       annotation: {
         select: {
           state: true,
@@ -257,10 +260,10 @@ export const GET = async (request: Request) => {
       market.score?.components && typeof market.score.components === "object"
         ? market.score.components
         : {};
-    const openInterest = hasOpenInterest(market.rawPayload)
+    const openInterest = hasOpenInterest(null, market.openInterest)
       ? market.openInterest
       : null;
-    const active = isActiveMarket(market.rawPayload);
+    const active = isActiveMarket(null, market.endDate);
     const outcomesSummary = summarizeOutcomes(
       market.outcomes,
       minOutcomeProbability
@@ -324,10 +327,7 @@ export const GET = async (request: Request) => {
 
   const sorter = sorters[sort] ?? sorters[DEFAULT_SORT];
   const sorted = [...filtered]
-    .map(
-      ({ isActive, rawPayload, hasAllowedTag, lowProbability, ...market }) =>
-        market
-    )
+    .map(({ isActive, hasAllowedTag, lowProbability, ...market }) => market)
     .sort(sorter);
   if (order === "desc") sorted.reverse();
 
