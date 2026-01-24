@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { put } from "@vercel/blob";
 import { Pool } from "pg";
 
 const CONFIG_PATH = path.join(process.cwd(), "config/app-config.json");
@@ -15,8 +16,19 @@ const DATABASE_URL =
 const EVENTS_BASE_URL =
   "https://gamma-api.polymarket.com/events?active=true&closed=false&limit=100&offset=";
 const MAX_RETRIES = 3;
+const MARKET_SNAPSHOT_KEY = "snapshots/markets.json";
+const STATUS_SNAPSHOT_KEY = "snapshots/status.json";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const writeSnapshot = async (key, payload) => {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return;
+  await put(key, JSON.stringify(payload), {
+    access: "public",
+    addRandomSuffix: false,
+    contentType: "application/json",
+  });
+};
 
 const safeNumber = (value) => {
   if (value === null || value === undefined) return null;
@@ -463,6 +475,7 @@ export const runSync = async (options = {}) => {
   try {
     const events = await fetchAllEvents();
     const markets = [];
+    const snapshotMarkets = [];
 
     events.forEach((event) => {
       const eventMarkets = Array.isArray(event?.markets) ? event.markets : [];
@@ -510,6 +523,21 @@ export const runSync = async (options = {}) => {
       await Promise.all(
         batch.map(async (market) => {
           const score = scoreMarket(market, config, refs);
+          snapshotMarkets.push({
+            id: market.id,
+            question: market.question,
+            description: market.description,
+            endDate: market.endDate ? market.endDate.toISOString() : null,
+            liquidity: market.liquidity,
+            volume24h: market.volume24h,
+            openInterest: market.openInterest,
+            tags: market.tags,
+            outcomes: market.outcomes,
+            restricted: market.restricted,
+            isExcluded: market.isExcluded,
+            marketUrl: market.marketUrl,
+            score,
+          });
           await prisma.market.upsert({
             where: { id: market.id },
             update: {
@@ -605,6 +633,25 @@ export const runSync = async (options = {}) => {
         lastRefs: refs,
       },
     });
+
+    try {
+      await writeSnapshot(MARKET_SNAPSHOT_KEY, {
+        generatedAt: now.toISOString(),
+        markets: snapshotMarkets,
+      });
+      await writeSnapshot(STATUS_SNAPSHOT_KEY, {
+        generatedAt: now.toISOString(),
+        status: {
+          lastAttemptedSyncAt: startedAt.toISOString(),
+          lastSuccessfulSyncAt: now.toISOString(),
+          lastError: null,
+          lastStats: { events: events.length, markets: upserted },
+          lastRefs: refs,
+        },
+      });
+    } catch (error) {
+      console.error("Snapshot write failed", error);
+    }
 
     return {
       events: events.length,

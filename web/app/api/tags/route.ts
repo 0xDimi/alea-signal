@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import config from "@/config/app-config.json";
 import { getPrisma } from "@/app/lib/prisma";
 import { normalizeTags } from "@/app/lib/market-utils";
+import { loadMarketSnapshot } from "@/app/lib/snapshot";
 
 type MarketTagRow = {
   tags: unknown;
@@ -21,10 +22,16 @@ const buildAllowedTagSet = () => {
 
 export const GET = async () => {
   try {
-    const prisma = getPrisma();
-    const markets: MarketTagRow[] = await prisma.market.findMany({
-      select: { tags: true },
-    });
+    const snapshot = await loadMarketSnapshot();
+    let markets: MarketTagRow[] = [];
+    if (snapshot?.markets?.length) {
+      markets = snapshot.markets.map((market) => ({ tags: market.tags }));
+    } else {
+      const prisma = getPrisma();
+      markets = await prisma.market.findMany({
+        select: { tags: true },
+      });
+    }
 
     const tagMap = new Map();
     const allowedTags = buildAllowedTagSet();

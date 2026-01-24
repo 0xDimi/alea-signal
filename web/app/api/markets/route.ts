@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import config from "@/config/app-config.json";
 import { getPrisma } from "@/app/lib/prisma";
+import { loadMarketSnapshot } from "@/app/lib/snapshot";
 import {
   daysToExpiry,
   expiryLabel,
@@ -32,7 +33,7 @@ type MarketRow = {
   id: string;
   question: string;
   description: string | null;
-  endDate: Date | null;
+  endDate: Date | string | null;
   liquidity: number;
   volume24h: number;
   openInterest: number;
@@ -193,147 +194,202 @@ const summarizeOutcomes = (outcomes: unknown, minProbability: number): OutcomeSu
   };
 };
 
-export const GET = async (request: Request) => {
+const loadAnnotations = async (marketIds: string[]) => {
+  if (!marketIds.length) return null;
   try {
     const prisma = getPrisma();
-    const { searchParams } = new URL(request.url);
-  const mode = (searchParams.get("mode") ?? "all").toLowerCase();
-  const minScore = Number(searchParams.get("minScore") ?? 0);
-  const sort = (searchParams.get("sort") ?? DEFAULT_SORT) as keyof typeof sorters;
-  const order = (searchParams.get("order") ?? "desc").toLowerCase();
-  const minDays = Number(searchParams.get("minDays") ?? Number.NEGATIVE_INFINITY);
-  const maxDays = Number(searchParams.get("maxDays") ?? Number.POSITIVE_INFINITY);
-  const hideRestricted = searchParams.get("hideRestricted") === "true";
-  const includeExcluded = searchParams.get("includeExcluded") === "true";
-  const minOutcomeProbability = resolveMinOutcomeProbability(
-    searchParams,
-    config.min_outcome_probability ?? 0.01
-  );
-  const tags = (searchParams.get("tags") ?? "")
-    .split(",")
-    .map((tag) => tag.trim().toLowerCase())
-    .filter(Boolean);
-  const allowedTagSet = buildAllowedTagSet();
+    const annotations = await prisma.annotation.findMany({
+      where: { marketId: { in: marketIds } },
+      select: { marketId: true, state: true, notes: true, owner: true },
+    });
+    const map = new Map<string, MarketRow["annotation"]>();
+    annotations.forEach((annotation) => {
+      map.set(annotation.marketId, {
+        state: annotation.state,
+        notes: annotation.notes,
+        owner: annotation.owner,
+      });
+    });
+    return map;
+  } catch (error) {
+    console.error("Annotation lookup failed", error);
+    return null;
+  }
+};
 
-    const markets: MarketRow[] = await prisma.market.findMany({
-      select: {
-        id: true,
-        question: true,
-        description: true,
-        endDate: true,
-        liquidity: true,
-        volume24h: true,
-        openInterest: true,
-        tags: true,
-        outcomes: true,
-        restricted: true,
-        isExcluded: true,
-        marketUrl: true,
-        score: {
-          select: {
-            totalScore: true,
-            components: true,
-            flags: true,
+export const GET = async (request: Request) => {
+  try {
+    const { searchParams } = new URL(request.url);
+    const mode = (searchParams.get("mode") ?? "all").toLowerCase();
+    const minScore = Number(searchParams.get("minScore") ?? 0);
+    const sort = (searchParams.get("sort") ?? DEFAULT_SORT) as keyof typeof sorters;
+    const order = (searchParams.get("order") ?? "desc").toLowerCase();
+    const minDays = Number(searchParams.get("minDays") ?? Number.NEGATIVE_INFINITY);
+    const maxDays = Number(searchParams.get("maxDays") ?? Number.POSITIVE_INFINITY);
+    const hideRestricted = searchParams.get("hideRestricted") === "true";
+    const includeExcluded = searchParams.get("includeExcluded") === "true";
+    const minOutcomeProbability = resolveMinOutcomeProbability(
+      searchParams,
+      config.min_outcome_probability ?? 0.01
+    );
+    const tags = (searchParams.get("tags") ?? "")
+      .split(",")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean);
+    const allowedTagSet = buildAllowedTagSet();
+
+    const snapshot = await loadMarketSnapshot();
+    let markets: MarketRow[] = [];
+    let usedSnapshot = false;
+
+    if (snapshot?.markets?.length) {
+      usedSnapshot = true;
+      markets = snapshot.markets.map((market) => ({
+        ...market,
+        score: market.score ?? null,
+        annotation: null,
+      }));
+      const annotationMap = await loadAnnotations(
+        markets.map((market) => market.id)
+      );
+      if (annotationMap) {
+        markets = markets.map((market) => ({
+          ...market,
+          annotation: annotationMap.get(market.id) ?? null,
+        }));
+      }
+    } else {
+      const prisma = getPrisma();
+      markets = await prisma.market.findMany({
+        select: {
+          id: true,
+          question: true,
+          description: true,
+          endDate: true,
+          liquidity: true,
+          volume24h: true,
+          openInterest: true,
+          tags: true,
+          outcomes: true,
+          restricted: true,
+          isExcluded: true,
+          marketUrl: true,
+          score: {
+            select: {
+              totalScore: true,
+              components: true,
+              flags: true,
+            },
+          },
+          annotation: {
+            select: {
+              state: true,
+              notes: true,
+              owner: true,
+            },
           },
         },
-      annotation: {
-        select: {
-          state: true,
-          notes: true,
-          owner: true,
+      });
+    }
+
+    const memoMaxDays = config.memo_max_days ?? 30;
+    const minDaysToExpiry = config.min_days_to_expiry ?? 0;
+
+    const hydrated = markets.map((market) => {
+      const days = daysToExpiry(market.endDate);
+      const expiry = expiryLabel(market.endDate);
+      const modeLabel = memoMode(days, memoMaxDays, minDaysToExpiry);
+      const flags = Array.isArray(market.score?.flags)
+        ? market.score.flags.filter((flag) => flag !== "restricted_market")
+        : [];
+      const components =
+        market.score?.components && typeof market.score.components === "object"
+          ? market.score.components
+          : {};
+      const openInterest = hasOpenInterest(null, market.openInterest)
+        ? market.openInterest
+        : null;
+      const active = isActiveMarket(null, market.endDate);
+      const outcomesSummary = summarizeOutcomes(
+        market.outcomes,
+        minOutcomeProbability
+      );
+      const lowProbability =
+        outcomesSummary.maxProbability !== null &&
+        outcomesSummary.maxProbability < minOutcomeProbability;
+      const slugs = tagSlugs(market.tags);
+      const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
+      return {
+        ...market,
+        daysToExpiry: days,
+        expiryLabel: expiry,
+        mode: modeLabel,
+        score: market.score?.totalScore ?? 0,
+        scoreComponents: components,
+        flags,
+        tags: normalizeTags(market.tags),
+        tagSlugs: slugs,
+        openInterest,
+        isActive: active,
+        restricted: false,
+        hasAllowedTag,
+        lowProbability,
+        outcomesSummary: {
+          total: outcomesSummary.total,
+          aboveThreshold: outcomesSummary.aboveThreshold,
+          threshold: minOutcomeProbability,
+          topOutcome: outcomesSummary.topOutcome,
         },
-      },
-    },
-  });
-
-  const memoMaxDays = config.memo_max_days ?? 30;
-  const minDaysToExpiry = config.min_days_to_expiry ?? 0;
-
-  const hydrated = markets.map((market) => {
-    const days = daysToExpiry(market.endDate);
-    const expiry = expiryLabel(market.endDate);
-    const modeLabel = memoMode(days, memoMaxDays, minDaysToExpiry);
-    const flags = Array.isArray(market.score?.flags)
-      ? market.score.flags.filter((flag) => flag !== "restricted_market")
-      : [];
-    const components =
-      market.score?.components && typeof market.score.components === "object"
-        ? market.score.components
-        : {};
-    const openInterest = hasOpenInterest(null, market.openInterest)
-      ? market.openInterest
-      : null;
-    const active = isActiveMarket(null, market.endDate);
-    const outcomesSummary = summarizeOutcomes(
-      market.outcomes,
-      minOutcomeProbability
-    );
-    const lowProbability =
-      outcomesSummary.maxProbability !== null &&
-      outcomesSummary.maxProbability < minOutcomeProbability;
-    const slugs = tagSlugs(market.tags);
-    const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
-    return {
-      ...market,
-      daysToExpiry: days,
-      expiryLabel: expiry,
-      mode: modeLabel,
-      score: market.score?.totalScore ?? 0,
-      scoreComponents: components,
-      flags,
-      tags: normalizeTags(market.tags),
-      tagSlugs: slugs,
-      openInterest,
-      isActive: active,
-      restricted: false,
-      hasAllowedTag,
-      lowProbability,
-      outcomesSummary: {
-        total: outcomesSummary.total,
-        aboveThreshold: outcomesSummary.aboveThreshold,
-        threshold: minOutcomeProbability,
-        topOutcome: outcomesSummary.topOutcome,
-      },
-    };
-  });
-
-  const filtered = hydrated.filter((market) => {
-    if (!includeExcluded && market.isExcluded) return false;
-    if (hideRestricted && market.restricted) return false;
-    if (!market.hasAllowedTag) return false;
-    if (market.lowProbability) return false;
-    if (Number.isFinite(minScore) && market.score < minScore) return false;
-    if (mode !== "all" && market.mode.toLowerCase() !== mode) return false;
-    if (!market.isActive) return false;
-    if (market.daysToExpiry !== null && market.daysToExpiry < 0) return false;
-    if (
-      Number.isFinite(minDaysToExpiry) &&
-      market.daysToExpiry !== null &&
-      market.daysToExpiry < minDaysToExpiry
-    ) {
-      return false;
-    }
-    if (Number.isFinite(minDays) && market.daysToExpiry !== null && market.daysToExpiry < minDays) {
-      return false;
-    }
-    if (Number.isFinite(maxDays) && market.daysToExpiry !== null && market.daysToExpiry > maxDays) {
-      return false;
-    }
-    if (tags.length > 0 && !tags.some((tag) => market.tagSlugs.includes(tag))) {
-      return false;
-    }
-    return true;
-  });
-
-  const sorter = sorters[sort] ?? sorters[DEFAULT_SORT];
-  const sorted = [...filtered]
-    .map(({ isActive, hasAllowedTag, lowProbability, ...market }) => market)
-    .sort(sorter);
-  if (order === "desc") sorted.reverse();
-
-    return NextResponse.json({
-      markets: sorted,
+      };
     });
+
+    const filtered = hydrated.filter((market) => {
+      if (!includeExcluded && market.isExcluded) return false;
+      if (hideRestricted && market.restricted) return false;
+      if (!market.hasAllowedTag) return false;
+      if (market.lowProbability) return false;
+      if (Number.isFinite(minScore) && market.score < minScore) return false;
+      if (mode !== "all" && market.mode.toLowerCase() !== mode) return false;
+      if (!market.isActive) return false;
+      if (market.daysToExpiry !== null && market.daysToExpiry < 0) return false;
+      if (
+        Number.isFinite(minDaysToExpiry) &&
+        market.daysToExpiry !== null &&
+        market.daysToExpiry < minDaysToExpiry
+      ) {
+        return false;
+      }
+      if (
+        Number.isFinite(minDays) &&
+        market.daysToExpiry !== null &&
+        market.daysToExpiry < minDays
+      ) {
+        return false;
+      }
+      if (
+        Number.isFinite(maxDays) &&
+        market.daysToExpiry !== null &&
+        market.daysToExpiry > maxDays
+      ) {
+        return false;
+      }
+      if (tags.length > 0 && !tags.some((tag) => market.tagSlugs.includes(tag))) {
+        return false;
+      }
+      return true;
+    });
+
+    const sorter = sorters[sort] ?? sorters[DEFAULT_SORT];
+    const sorted = [...filtered]
+      .map(({ isActive, hasAllowedTag, lowProbability, ...market }) => market)
+      .sort(sorter);
+    if (order === "desc") sorted.reverse();
+
+    const response = NextResponse.json({ markets: sorted });
+    if (usedSnapshot) {
+      response.headers.set("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+    }
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });
