@@ -460,17 +460,50 @@ export const runSync = async (options = {}) => {
   const configRaw = await fs.readFile(configPath, "utf-8");
   const fileConfig = JSON.parse(configRaw);
 
-  const { prisma, pool } = createPrismaClient();
-  const dbConfig = await prisma.scoreConfig.findUnique({ where: { id: 1 } });
+  const writeDb = options.writeDb ?? process.env.SYNC_WRITE_DB !== "false";
+  let prisma = null;
+  let pool = null;
+  let dbAvailable = false;
+  let dbError = null;
+
+  if (writeDb) {
+    try {
+      const client = createPrismaClient();
+      prisma = client.prisma;
+      pool = client.pool;
+      dbAvailable = true;
+    } catch (error) {
+      dbError = error;
+      dbAvailable = false;
+    }
+  }
+
+  let dbConfig = null;
+  if (dbAvailable && prisma) {
+    try {
+      dbConfig = await prisma.scoreConfig.findUnique({ where: { id: 1 } });
+    } catch (error) {
+      dbError = error;
+      dbAvailable = false;
+    }
+  }
+
   const config = mergeScoreConfig(fileConfig, dbConfig);
   const allowedTags = buildAllowedTagSet(config);
   const excludeTags = buildExcludeTagSet(config);
 
-  await prisma.syncStatus.upsert({
-    where: { id: 1 },
-    update: { lastAttemptedSyncAt: startedAt, lastError: null },
-    create: { id: 1, lastAttemptedSyncAt: startedAt, lastError: null },
-  });
+  if (dbAvailable && prisma) {
+    try {
+      await prisma.syncStatus.upsert({
+        where: { id: 1 },
+        update: { lastAttemptedSyncAt: startedAt, lastError: null },
+        create: { id: 1, lastAttemptedSyncAt: startedAt, lastError: null },
+      });
+    } catch (error) {
+      dbError = error;
+      dbAvailable = false;
+    }
+  }
 
   try {
     const events = await fetchAllEvents();
@@ -518,6 +551,12 @@ export const runSync = async (options = {}) => {
     const batchSize = config.sync_batch_size ?? 25;
     let upserted = 0;
 
+    const recordDbError = (error) => {
+      if (!dbAvailable) return;
+      dbAvailable = false;
+      dbError = error;
+    };
+
     for (let index = 0; index < marketsToProcess.length; index += batchSize) {
       const batch = marketsToProcess.slice(index, index + batchSize);
       await Promise.all(
@@ -538,101 +577,113 @@ export const runSync = async (options = {}) => {
             marketUrl: market.marketUrl,
             score,
           });
-          await prisma.market.upsert({
-            where: { id: market.id },
-            update: {
-              eventId: market.eventId,
-              slug: market.slug,
-              question: market.question,
-              description: market.description,
-              resolutionSource: market.resolutionSource,
-              endDate: market.endDate,
-              liquidity: market.liquidity,
-              volume24h: market.volume24h,
-              openInterest: market.openInterest,
-              tags: market.tags,
-              outcomes: market.outcomes,
-              isMultiOutcome: market.isMultiOutcome,
-              restricted: market.restricted,
-              marketUrl: market.marketUrl,
-              isExcluded: market.isExcluded,
-              rawPayload: market.rawPayload,
-              lastSeenAt: now,
-            },
-            create: {
-              id: market.id,
-              eventId: market.eventId,
-              slug: market.slug,
-              question: market.question,
-              description: market.description,
-              resolutionSource: market.resolutionSource,
-              endDate: market.endDate,
-              liquidity: market.liquidity,
-              volume24h: market.volume24h,
-              openInterest: market.openInterest,
-              tags: market.tags,
-              outcomes: market.outcomes,
-              isMultiOutcome: market.isMultiOutcome,
-              restricted: market.restricted,
-              marketUrl: market.marketUrl,
-              isExcluded: market.isExcluded,
-              rawPayload: market.rawPayload,
-              lastSeenAt: now,
-            },
-          });
+          if (!dbAvailable || !prisma) return;
+          try {
+            await prisma.market.upsert({
+              where: { id: market.id },
+              update: {
+                eventId: market.eventId,
+                slug: market.slug,
+                question: market.question,
+                description: market.description,
+                resolutionSource: market.resolutionSource,
+                endDate: market.endDate,
+                liquidity: market.liquidity,
+                volume24h: market.volume24h,
+                openInterest: market.openInterest,
+                tags: market.tags,
+                outcomes: market.outcomes,
+                isMultiOutcome: market.isMultiOutcome,
+                restricted: market.restricted,
+                marketUrl: market.marketUrl,
+                isExcluded: market.isExcluded,
+                rawPayload: market.rawPayload,
+                lastSeenAt: now,
+              },
+              create: {
+                id: market.id,
+                eventId: market.eventId,
+                slug: market.slug,
+                question: market.question,
+                description: market.description,
+                resolutionSource: market.resolutionSource,
+                endDate: market.endDate,
+                liquidity: market.liquidity,
+                volume24h: market.volume24h,
+                openInterest: market.openInterest,
+                tags: market.tags,
+                outcomes: market.outcomes,
+                isMultiOutcome: market.isMultiOutcome,
+                restricted: market.restricted,
+                marketUrl: market.marketUrl,
+                isExcluded: market.isExcluded,
+                rawPayload: market.rawPayload,
+                lastSeenAt: now,
+              },
+            });
 
-          await prisma.score.upsert({
-            where: { marketId: market.id },
-            update: {
-              totalScore: score.totalScore,
-              components: score.components,
-              flags: score.flags,
-              scoreVersion: config.score_version ?? "v2",
-              refs,
-              computedAt: now,
-            },
-            create: {
-              marketId: market.id,
-              totalScore: score.totalScore,
-              components: score.components,
-              flags: score.flags,
-              scoreVersion: config.score_version ?? "v2",
-              refs,
-              computedAt: now,
-            },
-          });
+            await prisma.score.upsert({
+              where: { marketId: market.id },
+              update: {
+                totalScore: score.totalScore,
+                components: score.components,
+                flags: score.flags,
+                scoreVersion: config.score_version ?? "v2",
+                refs,
+                computedAt: now,
+              },
+              create: {
+                marketId: market.id,
+                totalScore: score.totalScore,
+                components: score.components,
+                flags: score.flags,
+                scoreVersion: config.score_version ?? "v2",
+                refs,
+                computedAt: now,
+              },
+            });
 
-          await prisma.scoreHistory.create({
-            data: {
-              marketId: market.id,
-              totalScore: score.totalScore,
-              components: score.components,
-              flags: score.flags,
-              scoreVersion: config.score_version ?? "v2",
-              refs,
-              computedAt: now,
-            },
-          });
+            await prisma.scoreHistory.create({
+              data: {
+                marketId: market.id,
+                totalScore: score.totalScore,
+                components: score.components,
+                flags: score.flags,
+                scoreVersion: config.score_version ?? "v2",
+                refs,
+                computedAt: now,
+              },
+            });
 
-          await prisma.annotation.upsert({
-            where: { marketId: market.id },
-            update: {},
-            create: { marketId: market.id },
-          });
+            await prisma.annotation.upsert({
+              where: { marketId: market.id },
+              update: {},
+              create: { marketId: market.id },
+            });
+          } catch (error) {
+            recordDbError(error);
+          }
         })
       );
       upserted += batch.length;
     }
 
-    await prisma.syncStatus.update({
-      where: { id: 1 },
-      data: {
-        lastSuccessfulSyncAt: now,
-        lastError: null,
-        lastStats: { events: events.length, markets: upserted },
-        lastRefs: refs,
-      },
-    });
+    if (dbAvailable && prisma) {
+      try {
+        await prisma.syncStatus.update({
+          where: { id: 1 },
+          data: {
+            lastSuccessfulSyncAt: now,
+            lastError: null,
+            lastStats: { events: events.length, markets: upserted },
+            lastRefs: refs,
+          },
+        });
+      } catch (error) {
+        dbError = error;
+        dbAvailable = false;
+      }
+    }
 
     try {
       await writeSnapshot(MARKET_SNAPSHOT_KEY, {
@@ -657,19 +708,23 @@ export const runSync = async (options = {}) => {
       events: events.length,
       markets: upserted,
       refs,
+      dbStatus: dbAvailable ? "ok" : "skipped",
+      dbError: dbError ? String(dbError?.message ?? dbError) : null,
       startedAt,
       finishedAt: new Date(),
     };
   } catch (error) {
-    await prisma.syncStatus.update({
-      where: { id: 1 },
-      data: {
-        lastError: error?.message ?? String(error),
-      },
-    });
+    if (dbAvailable && prisma) {
+      await prisma.syncStatus.update({
+        where: { id: 1 },
+        data: {
+          lastError: error?.message ?? String(error),
+        },
+      });
+    }
     throw error;
   } finally {
-    await prisma.$disconnect();
-    await pool.end();
+    if (prisma) await prisma.$disconnect();
+    if (pool) await pool.end();
   }
 };
