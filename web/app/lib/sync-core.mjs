@@ -519,9 +519,11 @@ export const runSync = async (options = {}) => {
     });
 
     const marketLimit = config.sync_market_limit ?? null;
+    const allowedMarkets = markets.filter((market) => market.hasAleaTag);
+    const candidateMarkets = allowedMarkets.length ? allowedMarkets : markets;
     const marketsToProcess =
-      Number.isFinite(marketLimit) && marketLimit > 0 && markets.length > marketLimit
-        ? [...markets]
+      Number.isFinite(marketLimit) && marketLimit > 0 && candidateMarkets.length > marketLimit
+        ? [...candidateMarkets]
             .sort(
               (a, b) =>
                 b.liquidity - a.liquidity ||
@@ -529,7 +531,7 @@ export const runSync = async (options = {}) => {
                 b.openInterest - a.openInterest
             )
             .slice(0, marketLimit)
-        : markets;
+        : candidateMarkets;
 
     const liquidityValues = marketsToProcess
       .map((market) => market.liquidity)

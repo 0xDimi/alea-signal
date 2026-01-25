@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MarketDrawer } from "@/app/components/MarketDrawer";
+import config from "@/config/app-config.json";
 
 type TagItem = { slug: string; name: string };
 type Annotation = { state?: string; notes?: string; owner?: string };
@@ -150,6 +151,12 @@ const readErrorMessage = async (res: Response) => {
 };
 
 export const Screener = () => {
+  const allowedSectors = (config.allowed_sectors ?? []) as string[];
+  const sectorLabel = (value: string) =>
+    value
+      .split("-")
+      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+      .join(" ");
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [status, setStatus] = useState<SyncStatus | null>(null);
@@ -171,6 +178,7 @@ export const Screener = () => {
     minOutcomeProbability: 0.05,
     includeExcluded: false,
     selectedTags: [] as string[],
+    selectedSectors: allowedSectors,
   });
 
   const clampScore = (value: number) => Math.min(100, Math.max(0, value));
@@ -195,11 +203,26 @@ export const Screener = () => {
     Math.round(filters.minOutcomeProbability * 100)
   );
 
+  const normalizedSelectedSectors =
+    filters.selectedSectors.length > 0 ? filters.selectedSectors : allowedSectors;
+  const allSectorsSelected =
+    normalizedSelectedSectors.length === allowedSectors.length;
+
+  const allowedTagSet = useMemo(() => {
+    const map = (config.sector_map ?? {}) as Record<string, string[]>;
+    const set = new Set<string>();
+    normalizedSelectedSectors.forEach((sector) => {
+      (map[sector] ?? []).forEach((tag) => set.add(String(tag).toLowerCase()));
+    });
+    return set;
+  }, [normalizedSelectedSectors]);
+
   const filteredTags = useMemo(() => {
     const q = tagQuery.trim().toLowerCase();
-    if (!q) return tags;
-    return tags.filter((tag) => tag.name.toLowerCase().includes(q));
-  }, [tags, tagQuery]);
+    const visible = tags.filter((tag) => allowedTagSet.has(tag.slug));
+    if (!q) return visible;
+    return visible.filter((tag) => tag.name.toLowerCase().includes(q));
+  }, [tags, tagQuery, allowedTagSet]);
 
   const selectedTagItems = useMemo(() => {
     if (!filters.selectedTags.length) return [];
@@ -229,13 +252,18 @@ export const Screener = () => {
 
   const fetchTags = useCallback(async () => {
     try {
-      const res = await fetch("/api/tags");
+      const params = new URLSearchParams();
+      if (normalizedSelectedSectors.length) {
+        params.set("sectors", normalizedSelectedSectors.join(","));
+      }
+      const url = params.toString() ? `/api/tags?${params.toString()}` : "/api/tags";
+      const res = await fetch(url);
       const data = await res.json();
       setTags(data.tags ?? []);
     } catch (error) {
       console.error(error);
     }
-  }, []);
+  }, [normalizedSelectedSectors]);
 
   const fetchScoreConfig = useCallback(async () => {
     try {
@@ -256,6 +284,9 @@ export const Screener = () => {
     params.set("sort", filters.sort);
     params.set("order", filters.order);
     params.set("minOutcomeProbability", String(filters.minOutcomeProbability));
+    if (normalizedSelectedSectors.length) {
+      params.set("sectors", normalizedSelectedSectors.join(","));
+    }
     if (filters.minDays !== "") params.set("minDays", filters.minDays);
     if (filters.maxDays !== "") params.set("maxDays", filters.maxDays);
     if (filters.includeExcluded) params.set("includeExcluded", "true");
@@ -279,7 +310,7 @@ export const Screener = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, normalizedSelectedSectors]);
 
   const saveScoreConfig = async () => {
     if (!scoreConfig) return;
@@ -318,6 +349,15 @@ export const Screener = () => {
     fetchMarkets();
   }, [fetchMarkets]);
 
+  useEffect(() => {
+    setFilters((prev) => {
+      if (!prev.selectedTags.length) return prev;
+      const filtered = prev.selectedTags.filter((tag) => allowedTagSet.has(tag));
+      if (filtered.length === prev.selectedTags.length) return prev;
+      return { ...prev, selectedTags: filtered };
+    });
+  }, [allowedTagSet]);
+
   const updateAnnotation = async (marketId: string, payload: Annotation) => {
     const res = await fetch(`/api/markets/${marketId}/annotation`, {
       method: "PATCH",
@@ -340,6 +380,18 @@ export const Screener = () => {
     : status?.lastSuccessfulSyncAt
       ? `Synced ${formatDateTime(status.lastSuccessfulSyncAt)}`
       : "No sync yet";
+  const toggleSector = (sector: string) => {
+    setFilters((prev) => {
+      const active = prev.selectedSectors.includes(sector);
+      const next = active
+        ? prev.selectedSectors.filter((value) => value !== sector)
+        : [...prev.selectedSectors, sector];
+      return {
+        ...prev,
+        selectedSectors: next.length ? next : allowedSectors,
+      };
+    });
+  };
 
   return (
     <section className="relative z-10">
@@ -564,6 +616,50 @@ export const Screener = () => {
                 Include excluded tags
               </label>
             </div>
+
+            {allowedSectors.length ? (
+              <div>
+                <label className="text-xs font-semibold text-[color:var(--ink-muted)]">
+                  Sectors
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    onClick={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        selectedSectors: allowedSectors,
+                      }))
+                    }
+                    className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${focusRing} ${
+                      allSectorsSelected
+                        ? "border-transparent bg-[color:var(--accent)] text-slate-950 shadow-[0_8px_24px_-16px_rgba(125,211,252,0.9)]"
+                        : "border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--ink)] hover:border-[color:var(--accent-soft)]"
+                    }`}
+                  >
+                    All sectors
+                  </button>
+                  {allowedSectors.map((sector) => {
+                    const active = normalizedSelectedSectors.includes(sector);
+                    return (
+                      <button
+                        key={sector}
+                        onClick={() => toggleSector(sector)}
+                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${focusRing} ${
+                          active
+                            ? "border-transparent bg-[color:var(--accent)] text-slate-950 shadow-[0_8px_24px_-16px_rgba(125,211,252,0.9)]"
+                            : "border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--ink)] hover:border-[color:var(--accent-soft)]"
+                        }`}
+                      >
+                        {sectorLabel(sector)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-[color:var(--ink-dim)]">
+                  Tags and markets follow the sectors you pick.
+                </p>
+              </div>
+            ) : null}
 
             <div>
               <label className="text-xs font-semibold text-[color:var(--ink-muted)]">

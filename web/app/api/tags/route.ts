@@ -9,9 +9,11 @@ type MarketTagRow = {
   tags: unknown;
 };
 
-const buildAllowedTagSet = () => {
+const buildAllowedTagSet = (sectorsOverride?: string[]) => {
   const allowed = new Set<string>();
-  const sectors = (config.allowed_sectors ?? []) as string[];
+  const sectors = (sectorsOverride?.length
+    ? sectorsOverride
+    : (config.allowed_sectors ?? [])) as string[];
   const map = (config.sector_map ?? {}) as Record<string, string[]>;
   sectors.forEach((sector) => {
     const tags = map[sector] ?? [];
@@ -20,8 +22,23 @@ const buildAllowedTagSet = () => {
   return allowed;
 };
 
-export const GET = async () => {
+const resolveSelectedSectors = (searchParams: URLSearchParams) => {
+  const raw = searchParams.get("sectors");
+  const available = (config.allowed_sectors ?? []).map((sector) =>
+    String(sector).toLowerCase()
+  );
+  if (!raw) return available;
+  const selected = raw
+    .split(",")
+    .map((sector) => sector.trim().toLowerCase())
+    .filter((sector) => sector.length > 0 && available.includes(sector));
+  return selected.length ? selected : available;
+};
+
+export const GET = async (request: Request) => {
   try {
+    const { searchParams } = new URL(request.url);
+    const selectedSectors = resolveSelectedSectors(searchParams);
     const snapshot = await loadMarketSnapshot();
     let markets: MarketTagRow[] = [];
     if (snapshot?.markets?.length) {
@@ -34,7 +51,7 @@ export const GET = async () => {
     }
 
     const tagMap = new Map();
-    const allowedTags = buildAllowedTagSet();
+    const allowedTags = buildAllowedTagSet(selectedSectors);
     markets.forEach((market) => {
       normalizeTags(market.tags).forEach((tag) => {
         if (!allowedTags.has(tag.slug)) return;
