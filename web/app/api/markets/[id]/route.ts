@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getPrisma } from "@/app/lib/prisma";
 import { loadMarketSnapshot } from "@/app/lib/snapshot";
+import { getRuntimeSnapshot } from "@/app/lib/runtime-sync-cache";
 import {
   daysToExpiry,
   expiryLabel,
@@ -151,7 +152,20 @@ export const GET = async (
     }
 
     const snapshot = await loadMarketSnapshot();
-    const snapshotMarket = snapshot?.markets?.find((market) => market.id === marketId);
+    const maxSnapshotAgeMs = Number(
+      process.env.SNAPSHOT_MAX_AGE_MS ?? 6 * 60 * 60 * 1000
+    );
+    const snapshotAgeMs =
+      snapshot?.generatedAt && !Number.isNaN(new Date(snapshot.generatedAt).getTime())
+        ? Date.now() - new Date(snapshot.generatedAt).getTime()
+        : Number.POSITIVE_INFINITY;
+    const snapshotStale =
+      !snapshot?.markets?.length ||
+      !Number.isFinite(maxSnapshotAgeMs) ||
+      snapshotAgeMs > maxSnapshotAgeMs;
+    const snapshotMarket = !snapshotStale
+      ? snapshot?.markets?.find((market) => market.id === marketId)
+      : undefined;
     let prisma: ReturnType<typeof getPrisma> | null = null;
     let market: MarketRecord | null = null;
     let rawPayload: unknown = null;
@@ -203,6 +217,18 @@ export const GET = async (
       const { score: snapshotScore, ...rest } = snapshotMarket;
       market = rest as MarketRecord;
       score = snapshotScore ?? null;
+    }
+
+    if (!market && snapshotStale) {
+      const runtimeSnapshot = await getRuntimeSnapshot();
+      const runtimeMarket = runtimeSnapshot?.markets?.find(
+        (item) => item.id === marketId
+      );
+      if (runtimeMarket) {
+        const { score: runtimeScore, ...rest } = runtimeMarket;
+        market = rest as MarketRecord;
+        score = runtimeScore ?? null;
+      }
     }
 
     if (!market) {
