@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import config from "@/config/app-config.json";
 import { getPrisma } from "@/app/lib/prisma";
 import { loadMarketSnapshot } from "@/app/lib/snapshot";
+import { getRuntimeSnapshot } from "@/app/lib/runtime-sync-cache";
 import {
   daysToExpiry,
   expiryLabel,
@@ -260,10 +261,21 @@ export const GET = async (request: Request) => {
     const allowedTagSet = buildAllowedTagSet(selectedSectors);
 
     const snapshot = await loadMarketSnapshot();
+    const maxSnapshotAgeMs = Number(
+      process.env.SNAPSHOT_MAX_AGE_MS ?? 6 * 60 * 60 * 1000
+    );
+    const snapshotAgeMs =
+      snapshot?.generatedAt && !Number.isNaN(new Date(snapshot.generatedAt).getTime())
+        ? Date.now() - new Date(snapshot.generatedAt).getTime()
+        : Number.POSITIVE_INFINITY;
+    const snapshotStale =
+      !snapshot?.markets?.length ||
+      !Number.isFinite(maxSnapshotAgeMs) ||
+      snapshotAgeMs > maxSnapshotAgeMs;
     let markets: MarketRow[] = [];
     let usedSnapshot = false;
 
-    if (snapshot?.markets?.length) {
+    if (!snapshotStale && snapshot?.markets?.length) {
       usedSnapshot = true;
       markets = snapshot.markets.map((market) => ({
         ...market,
@@ -280,6 +292,27 @@ export const GET = async (request: Request) => {
         }));
       }
     } else {
+      const runtimeSnapshot = await getRuntimeSnapshot();
+      if (runtimeSnapshot?.markets?.length) {
+        usedSnapshot = true;
+        markets = runtimeSnapshot.markets.map((market) => ({
+          ...market,
+          score: market.score ?? null,
+          annotation: null,
+        }));
+        const annotationMap = await loadAnnotations(
+          markets.map((market) => market.id)
+        );
+        if (annotationMap) {
+          markets = markets.map((market) => ({
+            ...market,
+            annotation: annotationMap.get(market.id) ?? null,
+          }));
+        }
+      }
+    }
+
+    if (!markets.length) {
       const prisma = getPrisma();
       markets = await prisma.market.findMany({
         select: {

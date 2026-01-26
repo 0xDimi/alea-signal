@@ -455,6 +455,8 @@ const mergeScoreConfig = (fileConfig, dbConfig) => {
 };
 
 export const runSync = async (options = {}) => {
+  const returnSnapshot = options?.returnSnapshot === true;
+  const skipSnapshotWrite = options?.skipSnapshotWrite === true;
   const startedAt = new Date();
   const configPath = options.configPath ?? CONFIG_PATH;
   const configRaw = await fs.readFile(configPath, "utf-8");
@@ -687,26 +689,28 @@ export const runSync = async (options = {}) => {
       }
     }
 
-    try {
-      await writeSnapshot(MARKET_SNAPSHOT_KEY, {
-        generatedAt: now.toISOString(),
-        markets: snapshotMarkets,
-      });
-      await writeSnapshot(STATUS_SNAPSHOT_KEY, {
-        generatedAt: now.toISOString(),
-        status: {
-          lastAttemptedSyncAt: startedAt.toISOString(),
-          lastSuccessfulSyncAt: now.toISOString(),
-          lastError: null,
-          lastStats: { events: events.length, markets: upserted },
-          lastRefs: refs,
-        },
-      });
-    } catch (error) {
-      console.error("Snapshot write failed", error);
+    if (!skipSnapshotWrite) {
+      try {
+        await writeSnapshot(MARKET_SNAPSHOT_KEY, {
+          generatedAt: now.toISOString(),
+          markets: snapshotMarkets,
+        });
+        await writeSnapshot(STATUS_SNAPSHOT_KEY, {
+          generatedAt: now.toISOString(),
+          status: {
+            lastAttemptedSyncAt: startedAt.toISOString(),
+            lastSuccessfulSyncAt: now.toISOString(),
+            lastError: null,
+            lastStats: { events: events.length, markets: upserted },
+            lastRefs: refs,
+          },
+        });
+      } catch (error) {
+        console.error("Snapshot write failed", error);
+      }
     }
 
-    return {
+    const result = {
       events: events.length,
       markets: upserted,
       refs,
@@ -715,6 +719,10 @@ export const runSync = async (options = {}) => {
       startedAt,
       finishedAt: new Date(),
     };
+    if (returnSnapshot) {
+      result.snapshotMarkets = snapshotMarkets;
+    }
+    return result;
   } catch (error) {
     if (dbAvailable && prisma) {
       await prisma.syncStatus.update({
