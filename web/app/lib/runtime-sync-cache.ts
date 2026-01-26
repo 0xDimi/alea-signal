@@ -22,7 +22,7 @@ const resolveTtl = () => {
 const buildStatus = (result: any): StatusSnapshot["status"] => ({
   lastAttemptedSyncAt: result.startedAt?.toISOString?.() ?? null,
   lastSuccessfulSyncAt: result.finishedAt?.toISOString?.() ?? null,
-  lastError: result.dbError ?? null,
+  lastError: null,
   lastStats: { events: result.events ?? 0, markets: result.markets ?? 0 },
   lastRefs: result.refs ?? null,
 });
