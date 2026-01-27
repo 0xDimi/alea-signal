@@ -284,16 +284,11 @@ export const GET = async (request: Request) => {
           .toLowerCase()
           .includes("kalshi") || String(market.marketUrl ?? "").includes("kalshi.com")
     );
-    const snapshotHasOutcomes = snapshot?.markets?.some((market) => {
-      const outcomes = market.outcomes as unknown;
-      return Array.isArray(outcomes) && outcomes.length > 0;
-    });
     const snapshotStale =
       !snapshot?.markets?.length ||
       !Number.isFinite(maxSnapshotAgeMs) ||
       snapshotAgeMs > maxSnapshotAgeMs ||
-      (sourceFilter === "kalshi" && !snapshotHasKalshi) ||
-      !snapshotHasOutcomes;
+      (sourceFilter === "kalshi" && !snapshotHasKalshi);
     let markets: MarketRow[] = [];
     let usedSnapshot = false;
 
@@ -392,8 +387,8 @@ export const GET = async (request: Request) => {
       );
       const lowProbability =
         minOutcomeProbability > 0 &&
-        (outcomesSummary.maxProbability === null ||
-          outcomesSummary.maxProbability < minOutcomeProbability);
+        outcomesSummary.maxProbability !== null &&
+        outcomesSummary.maxProbability < minOutcomeProbability;
       const slugs = tagSlugs(market.tags);
       const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
       const source = resolveSource(market);
