@@ -18,7 +18,6 @@ type ScoreConfig = {
 
 type MarketRow = {
   id: string;
-  source?: string | null;
   question: string;
   description?: string | null;
   endDate?: string | null;
@@ -171,7 +170,6 @@ export const Screener = () => {
 
   const [filters, setFilters] = useState({
     mode: "all",
-    source: "all",
     minScore: 50,
     sort: "score",
     order: "desc",
@@ -217,7 +215,7 @@ export const Screener = () => {
       (map[sector] ?? []).forEach((tag) => set.add(String(tag).toLowerCase()));
     });
     return set;
-  }, [normalizedSelectedSectors, filters.source]);
+  }, [normalizedSelectedSectors]);
 
   const filteredTags = useMemo(() => {
     const q = tagQuery.trim().toLowerCase();
@@ -258,9 +256,6 @@ export const Screener = () => {
       if (normalizedSelectedSectors.length) {
         params.set("sectors", normalizedSelectedSectors.join(","));
       }
-      if (filters.source !== "all") {
-        params.set("source", filters.source);
-      }
       const url = params.toString() ? `/api/tags?${params.toString()}` : "/api/tags";
       const res = await fetch(url);
       const data = await res.json();
@@ -289,9 +284,6 @@ export const Screener = () => {
     params.set("sort", filters.sort);
     params.set("order", filters.order);
     params.set("minOutcomeProbability", String(filters.minOutcomeProbability));
-    if (filters.source !== "all") {
-      params.set("source", filters.source);
-    }
     if (normalizedSelectedSectors.length) {
       params.set("sectors", normalizedSelectedSectors.join(","));
     }
@@ -388,11 +380,6 @@ export const Screener = () => {
     : status?.lastSuccessfulSyncAt
       ? `Synced ${formatDateTime(status.lastSuccessfulSyncAt)}`
       : "No sync yet";
-  const sourceOptions = [
-    { label: "All", value: "all" },
-    { label: "Polymarket", value: "polymarket" },
-    { label: "Kalshi", value: "kalshi" },
-  ];
   const toggleSector = (sector: string) => {
     setFilters((prev) => {
       const active = prev.selectedSectors.includes(sector);
@@ -458,29 +445,6 @@ export const Screener = () => {
                     }
                     className={`rounded-full border px-3 py-2.5 text-xs font-semibold transition ${focusRing} ${
                       filters.mode === option.value
-                        ? "border-transparent bg-[color:var(--accent)] text-slate-950 shadow-[0_8px_24px_-16px_rgba(125,211,252,0.9)]"
-                        : "border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--ink)] hover:border-[color:var(--accent-soft)]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-[color:var(--ink-muted)]">
-                Source
-              </label>
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {sourceOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() =>
-                      setFilters((prev) => ({ ...prev, source: option.value }))
-                    }
-                    className={`rounded-full border px-3 py-2.5 text-xs font-semibold transition ${focusRing} ${
-                      filters.source === option.value
                         ? "border-transparent bg-[color:var(--accent)] text-slate-950 shadow-[0_8px_24px_-16px_rgba(125,211,252,0.9)]"
                         : "border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--ink)] hover:border-[color:var(--accent-soft)]"
                     }`}
@@ -924,9 +888,6 @@ export const Screener = () => {
                         <span className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                           {market.mode}
                         </span>
-                        <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
-                          {market.source === "kalshi" ? "Kalshi" : "Polymarket"}
-                        </span>
                       </div>
                       <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--ink)]">
                         {stateLabel}
@@ -1172,12 +1133,7 @@ export const Screener = () => {
                         <td
                           className={`${rowCell(isSelected)} text-[11px] font-semibold tracking-[0.1em] text-[color:var(--ink-dim)]`}
                         >
-                          <span className="inline-flex items-center gap-2">
-                            <span>{market.mode}</span>
-                            <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
-                              {market.source === "kalshi" ? "Kalshi" : "Polymarket"}
-                            </span>
-                          </span>
+                          {market.mode}
                         </td>
                         <td className={`${rowCell(isSelected)} text-[color:var(--ink)]`}>
                           <div className="max-w-sm text-sm font-semibold leading-snug text-[color:var(--ink)]">

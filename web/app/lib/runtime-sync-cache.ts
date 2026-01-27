@@ -27,63 +27,12 @@ const buildStatus = (result: any): StatusSnapshot["status"] => ({
   lastRefs: result.refs ?? null,
 });
 
-const dedupeById = (records: MarketSnapshot["markets"]) => {
-  const map = new Map<string, MarketSnapshot["markets"][number]>();
-  records.forEach((record) => {
-    if (!record?.id) return;
-    map.set(String(record.id), record);
-  });
-  return Array.from(map.values());
-};
-
-const hasKalshiMarkets = (records: MarketSnapshot["markets"]) =>
-  records.some((record) => {
-    const source = String(record.source ?? "").toLowerCase();
-    if (source.includes("kalshi")) return true;
-    const url = String(record.marketUrl ?? "");
-    return url.includes("kalshi.com");
-  });
-
-const ensureOutcomes = (records: MarketSnapshot["markets"]) =>
-  records.map((record) => {
-    if (record.outcomes && Array.isArray(record.outcomes) && record.outcomes.length) {
-      return record;
-    }
-    const payload = record as { rawPayload?: any };
-    const market = payload.rawPayload?.market ?? payload.rawPayload ?? null;
-    const event = payload.rawPayload?.event ?? payload.rawPayload ?? null;
-    const outcomePrices =
-      market?.outcomePrices ??
-      market?.outcome_prices ??
-      market?.outcomeTokenPrices ??
-      market?.outcome_token_prices ??
-      event?.outcomePrices ??
-      event?.outcome_prices ??
-      null;
-    if (!Array.isArray(outcomePrices) || !outcomePrices.length) {
-      return record;
-    }
-    const names =
-      outcomePrices.length === 2 ? ["Yes", "No"] : outcomePrices.map((_, idx) => `Outcome ${idx + 1}`);
-    const outcomes = names.map((name, idx) => {
-      const price = Number(outcomePrices[idx]);
-      return Number.isFinite(price) ? { name, probability: price } : { name };
-    });
-    return { ...record, outcomes };
-  });
-
-export const getRuntimeSnapshot = async (options?: {
-  requireKalshi?: boolean;
-}): Promise<RuntimeSnapshot | null> => {
+export const getRuntimeSnapshot = async (): Promise<RuntimeSnapshot | null> => {
   const ttl = resolveTtl();
   const now = Date.now();
   const cached = cache.get("snapshot");
   if (cached && now - cached.fetchedAt < ttl) {
-    if (options?.requireKalshi && !hasKalshiMarkets(cached.data.markets)) {
-      cache.delete("snapshot");
-    } else {
-      return cached.data;
-    }
+    return cached.data;
   }
 
   if (!inFlight) {
@@ -92,10 +41,9 @@ export const getRuntimeSnapshot = async (options?: {
         if (!result?.snapshotMarkets) return null;
         const generatedAt =
           result.finishedAt?.toISOString?.() ?? new Date().toISOString();
-        const normalizedMarkets = ensureOutcomes(dedupeById(result.snapshotMarkets));
         const data: RuntimeSnapshot = {
           generatedAt,
-          markets: normalizedMarkets,
+          markets: result.snapshotMarkets,
           status: buildStatus(result),
         };
         cache.set("snapshot", { fetchedAt: Date.now(), data });

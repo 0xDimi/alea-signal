@@ -14,7 +14,6 @@ export type MarketSnapshot = {
   generatedAt: string;
   markets: Array<{
     id: string;
-    source?: string | null;
     question: string;
     description: string | null;
     endDate: string | null;
