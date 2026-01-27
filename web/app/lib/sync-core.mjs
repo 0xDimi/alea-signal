@@ -410,6 +410,12 @@ const buildAllowedTagSet = (config) => {
   return allowed;
 };
 
+const buildSectorTagSet = (config, sector) => {
+  const map = config.sector_map ?? {};
+  const tags = map?.[sector] ?? [];
+  return new Set(tags.map((tag) => String(tag).toLowerCase()));
+};
+
 const buildExcludeTagSet = (config) => {
   return new Set((config.exclude_tags ?? []).map((tag) => String(tag).toLowerCase()));
 };
@@ -633,7 +639,10 @@ const buildMarketRecord = (market, event, index, config, allowedTags, excludeTag
     : null;
   const outcomesCount = Array.isArray(outcomes) ? outcomes.length : 0;
 
-  const hasAleaTag = tagSlugs.some((slugValue) => allowedTags.has(slugValue));
+  const cryptoTags = buildSectorTagSet(config, "crypto");
+  const hasCryptoTag = tagSlugs.some((slugValue) => cryptoTags.has(slugValue));
+  const hasAleaTag =
+    hasCryptoTag && tagSlugs.some((slugValue) => allowedTags.has(slugValue));
   const isExcluded = tagSlugs.some((slugValue) => excludeTags.has(slugValue));
 
   return {
