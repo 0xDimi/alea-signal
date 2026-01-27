@@ -106,6 +106,20 @@ const slugifyTag = (value) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const matchesTagInText = (text, tag) => {
+  if (!text || !tag) return false;
+  const slug = slugifyTag(tag);
+  if (!slug) return false;
+  const tokens = slug.split("-").filter(Boolean).map(escapeRegex);
+  if (!tokens.length) return false;
+  const sep = "[\\s\\-_/]*";
+  const pattern = `(^|[^a-z0-9])${tokens.join(sep)}($|[^a-z0-9])`;
+  const regex = new RegExp(pattern, "i");
+  return regex.test(text);
+};
+
 const parseDollars = (value) => {
   if (value === null || value === undefined) return null;
   const num = typeof value === "string" ? Number(value) : Number(value);
@@ -354,13 +368,18 @@ const buildKalshiRecord = (market, eventMeta, config, allowedTags, excludeTags) 
   const category = market?.category ?? eventMeta?.category ?? null;
   const categorySlug = category ? slugifyTag(category) : null;
   const categoryTags = category ? mapKalshiCategoryTags(category) : [];
-  const text = `${title} ${subtitle} ${rulesPrimary} ${rulesSecondary}`;
+  const text = `${title} ${subtitle} ${rulesPrimary} ${rulesSecondary}`.trim();
   const textTags = inferTagsFromText(text, config);
   const rawTags = [categorySlug, ...textTags, ...categoryTags].filter(Boolean);
   const tagSlugs = rawTags.map((tag) => slugifyTag(tag)).filter(Boolean);
   const tags = normalizeTags(tagSlugs);
 
-  const hasAleaTag = tagSlugs.some((slugValue) => allowedTags.has(slugValue));
+  const cryptoTags = buildSectorTagSet(config, "crypto");
+  const hasCryptoTag =
+    categorySlug === "crypto" ||
+    Array.from(cryptoTags).some((tag) => matchesTagInText(text, tag));
+  const hasAleaTag =
+    hasCryptoTag && tagSlugs.some((slugValue) => allowedTags.has(slugValue));
   const isExcluded = tagSlugs.some((slugValue) => excludeTags.has(slugValue));
 
   const outcomes = [
