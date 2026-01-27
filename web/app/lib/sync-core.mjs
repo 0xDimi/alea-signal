@@ -17,7 +17,9 @@ const EVENTS_BASE_URL =
   "https://gamma-api.polymarket.com/events?active=true&closed=false&limit=100&offset=";
 const KALSHI_BASE_URL =
   process.env.KALSHI_BASE_URL ?? "https://api.elections.kalshi.com/trade-api/v2";
-const KALSHI_STATUS = process.env.KALSHI_STATUS ?? "open";
+const KALSHI_MARKET_STATUS =
+  process.env.KALSHI_MARKET_STATUS ?? process.env.KALSHI_STATUS ?? "active";
+const KALSHI_EVENT_STATUS = process.env.KALSHI_EVENT_STATUS ?? "open";
 const KALSHI_LIMIT = Number(process.env.KALSHI_LIMIT ?? 1000);
 const KALSHI_MAX_PAGES = Number(process.env.KALSHI_MAX_PAGES ?? 10);
 const MAX_RETRIES = 3;
@@ -235,7 +237,7 @@ const fetchKalshiMarkets = async () => {
   let pages = 0;
   while (pages < KALSHI_MAX_PAGES) {
     const params = new URLSearchParams();
-    params.set("status", KALSHI_STATUS);
+    params.set("status", KALSHI_MARKET_STATUS);
     params.set("limit", String(KALSHI_LIMIT));
     if (cursor) params.set("cursor", cursor);
     const url = `${KALSHI_BASE_URL}/markets?${params.toString()}`;
@@ -255,7 +257,7 @@ const fetchKalshiEvents = async () => {
   let pages = 0;
   while (pages < KALSHI_MAX_PAGES) {
     const params = new URLSearchParams();
-    params.set("status", KALSHI_STATUS);
+    params.set("status", KALSHI_EVENT_STATUS);
     params.set("limit", String(KALSHI_LIMIT));
     if (cursor) params.set("cursor", cursor);
     const url = `${KALSHI_BASE_URL}/events?${params.toString()}`;
