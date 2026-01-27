@@ -32,6 +32,7 @@ const sorters: Record<string, (a: SortableMarket, b: SortableMarket) => number> 
 
 type MarketRow = {
   id: string;
+  source?: string | null;
   question: string;
   description: string | null;
   endDate: Date | string | null;
@@ -53,6 +54,14 @@ type MarketRow = {
     notes: string | null;
     owner: string | null;
   } | null;
+};
+
+const resolveSource = (market: { source?: string | null; marketUrl?: string | null }) => {
+  const explicit = market.source ? String(market.source).toLowerCase() : null;
+  if (explicit === "kalshi" || explicit === "polymarket") return explicit;
+  const url = market.marketUrl ?? "";
+  if (url.includes("kalshi.com")) return "kalshi";
+  return "polymarket";
 };
 
 const hasOwn = (value: unknown, key: string) =>
@@ -247,6 +256,7 @@ export const GET = async (request: Request) => {
     const order = (searchParams.get("order") ?? "desc").toLowerCase();
     const minDays = Number(searchParams.get("minDays") ?? Number.NEGATIVE_INFINITY);
     const maxDays = Number(searchParams.get("maxDays") ?? Number.POSITIVE_INFINITY);
+    const sourceFilter = (searchParams.get("source") ?? "all").toLowerCase();
     const hideRestricted = searchParams.get("hideRestricted") === "true";
     const includeExcluded = searchParams.get("includeExcluded") === "true";
     const minOutcomeProbability = resolveMinOutcomeProbability(
@@ -373,8 +383,10 @@ export const GET = async (request: Request) => {
         outcomesSummary.maxProbability < minOutcomeProbability;
       const slugs = tagSlugs(market.tags);
       const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
+      const source = resolveSource(market);
       return {
         ...market,
+        source,
         daysToExpiry: days,
         expiryLabel: expiry,
         mode: modeLabel,
@@ -398,6 +410,12 @@ export const GET = async (request: Request) => {
     });
 
     const filtered = hydrated.filter((market) => {
+      if (
+        sourceFilter !== "all" &&
+        sourceFilter !== market.source?.toLowerCase()
+      ) {
+        return false;
+      }
       if (!includeExcluded && market.isExcluded) return false;
       if (hideRestricted && market.restricted) return false;
       if (!market.hasAllowedTag) return false;

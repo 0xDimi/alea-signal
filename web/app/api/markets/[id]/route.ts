@@ -39,6 +39,7 @@ type NormalizedOutcome = { name: string; probability?: number | null };
 
 type MarketRecord = {
   id: string;
+  source?: string | null;
   question: string;
   description: string | null;
   endDate: Date | string | null;
@@ -53,6 +54,14 @@ type MarketRecord = {
   rawPayload?: unknown;
   annotation?: unknown;
   score?: unknown;
+};
+
+const resolveSource = (market: { source?: string | null; marketUrl?: string | null }) => {
+  const explicit = market.source ? String(market.source).toLowerCase() : null;
+  if (explicit === "kalshi" || explicit === "polymarket") return explicit;
+  const url = market.marketUrl ?? "";
+  if (url.includes("kalshi.com")) return "kalshi";
+  return "polymarket";
 };
 
 const normalizeOutcome = (value: unknown): NormalizedOutcome | null => {
@@ -259,6 +268,7 @@ export const GET = async (
       config.min_outcome_probability ?? 0.01
     );
     const outcomesSummary = summarizeOutcomes(outcomesRaw, minOutcomeProbability);
+    const source = resolveSource(payload);
 
     const scoreRecord =
       score && typeof score === "object" ? (score as Record<string, unknown>) : null;
@@ -293,6 +303,7 @@ export const GET = async (
 
     return NextResponse.json({
       ...payload,
+      source,
       score: normalizedScore,
       openInterest,
       tags: normalizeTags(payload.tags),

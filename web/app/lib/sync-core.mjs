@@ -15,6 +15,11 @@ const DATABASE_URL =
   process.env.NEON_DATABASE_URL;
 const EVENTS_BASE_URL =
   "https://gamma-api.polymarket.com/events?active=true&closed=false&limit=100&offset=";
+const KALSHI_BASE_URL =
+  process.env.KALSHI_BASE_URL ?? "https://api.elections.kalshi.com/trade-api/v2";
+const KALSHI_STATUS = process.env.KALSHI_STATUS ?? "open";
+const KALSHI_LIMIT = Number(process.env.KALSHI_LIMIT ?? 1000);
+const KALSHI_MAX_PAGES = Number(process.env.KALSHI_MAX_PAGES ?? 10);
 const MAX_RETRIES = 3;
 const MARKET_SNAPSHOT_KEY = "snapshots/markets.json";
 const STATUS_SNAPSHOT_KEY = "snapshots/status.json";
@@ -84,6 +89,66 @@ const normalizeTags = (tags) => {
     .filter(Boolean);
 };
 
+const slugifyTag = (value) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const parseDollars = (value) => {
+  if (value === null || value === undefined) return null;
+  const num = typeof value === "string" ? Number(value) : Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const textIncludes = (text, needle) =>
+  text.includes(needle) || text.includes(needle.replace(/-/g, " "));
+
+const inferTagsFromText = (text, config) => {
+  const tagSet = new Set();
+  const lowered = text.toLowerCase();
+  const map = config?.sector_map ?? {};
+  const sectorTags = Object.values(map).flat();
+  sectorTags.forEach((tag) => {
+    const slug = slugifyTag(tag);
+    if (!slug) return;
+    if (textIncludes(lowered, slug)) {
+      tagSet.add(slug);
+    }
+  });
+  const aliases = new Map([
+    ["s&p 500", "sp-500"],
+    ["sp500", "sp-500"],
+    ["nasdaq", "nasdaq"],
+    ["dow", "dow"],
+    ["federal reserve", "fed"],
+    ["interest rate", "rates"],
+    ["rate hike", "rate-hikes"],
+    ["rate cut", "rate-cuts"],
+    ["nonfarm payrolls", "nonfarm-payrolls"],
+    ["cpi", "cpi"],
+    ["pce", "pce"],
+    ["gdp", "gdp"],
+    ["unemployment", "unemployment"],
+    ["bitcoin", "bitcoin"],
+    ["btc", "btc"],
+    ["ethereum", "ethereum"],
+    ["eth", "eth"],
+    ["solana", "solana"],
+    ["xrp", "xrp"],
+    ["ripple", "ripple"],
+    ["oil", "oil"],
+    ["gold", "gold"],
+    ["dollar", "dollar"],
+  ]);
+  aliases.forEach((tag, alias) => {
+    if (lowered.includes(alias)) tagSet.add(tag);
+  });
+  return Array.from(tagSet);
+};
+
 const normalizeOutcomeName = (value) => {
   if (typeof value === "string") return value;
   if (value && typeof value === "object") {
@@ -141,7 +206,7 @@ const fetchJson = async (url, attempt = 0) => {
       await sleep(400 * Math.pow(2, attempt));
       return fetchJson(url, attempt + 1);
     }
-    throw new Error(`Gamma API error ${response.status} for ${url}`);
+    throw new Error(`API error ${response.status} for ${url}`);
   }
   return response.json();
 };
@@ -162,6 +227,118 @@ const fetchAllEvents = async () => {
     await sleep(200);
   }
   return events;
+};
+
+const fetchKalshiMarkets = async () => {
+  const markets = [];
+  let cursor = null;
+  let pages = 0;
+  while (pages < KALSHI_MAX_PAGES) {
+    const params = new URLSearchParams();
+    params.set("status", KALSHI_STATUS);
+    params.set("limit", String(KALSHI_LIMIT));
+    if (cursor) params.set("cursor", cursor);
+    const url = `${KALSHI_BASE_URL}/markets?${params.toString()}`;
+    const data = await fetchJson(url);
+    const batch = Array.isArray(data?.markets) ? data.markets : [];
+    markets.push(...batch);
+    cursor = data?.cursor ?? data?.next_cursor ?? null;
+    pages += 1;
+    if (!cursor || batch.length === 0) break;
+  }
+  return markets;
+};
+
+const buildKalshiRecord = (market, config, allowedTags, excludeTags) => {
+  const id = market?.ticker ?? market?.id ?? market?.market_id ?? null;
+  if (!id) return null;
+  const title = market?.title ?? "Untitled market";
+  const subtitle = market?.subtitle ?? "";
+  const rulesPrimary = market?.rules_primary ?? "";
+  const rulesSecondary = market?.rules_secondary ?? "";
+  const description = rulesPrimary || subtitle || null;
+  const resolutionSource = rulesSecondary || rulesPrimary || null;
+  const endDate = parseDate(market?.expiration_time ?? market?.close_time);
+
+  const notionalValue =
+    parseDollars(market?.notional_value_dollars) ??
+    (safeNumber(market?.notional_value) ?? 0) / 100;
+
+  const yesBid =
+    parseDollars(market?.yes_bid_dollars) ??
+    (safeNumber(market?.yes_bid) ?? null) / 100;
+  const yesAsk =
+    parseDollars(market?.yes_ask_dollars) ??
+    (safeNumber(market?.yes_ask) ?? null) / 100;
+  const lastPrice =
+    parseDollars(market?.last_price_dollars) ??
+    (safeNumber(market?.last_price) ?? null) / 100;
+
+  const yesMid =
+    yesBid !== null && yesAsk !== null ? (yesBid + yesAsk) / 2 : yesBid ?? yesAsk;
+  const yesProbability = Number.isFinite(lastPrice ?? NaN)
+    ? lastPrice
+    : yesMid ?? null;
+
+  const liquidity =
+    parseDollars(market?.liquidity_dollars) ??
+    (safeNumber(market?.liquidity) ?? 0) / 100 ??
+    0;
+  const volume24hContracts =
+    safeNumber(market?.volume_24h) ??
+    safeNumber(market?.volume_24h_fp) ??
+    0;
+  const volume24h = notionalValue ? volume24hContracts * notionalValue : volume24hContracts;
+  const openInterestContracts =
+    safeNumber(market?.open_interest) ?? safeNumber(market?.open_interest_fp) ?? 0;
+  const openInterest = notionalValue
+    ? openInterestContracts * notionalValue
+    : openInterestContracts;
+
+  const categorySlug = market?.category ? slugifyTag(market.category) : null;
+  const text = `${title} ${subtitle} ${rulesPrimary} ${rulesSecondary}`;
+  const textTags = inferTagsFromText(text, config);
+  const rawTags = [categorySlug, ...textTags].filter(Boolean);
+  const tagSlugs = rawTags.map((tag) => slugifyTag(tag)).filter(Boolean);
+  const tags = normalizeTags(tagSlugs);
+
+  const hasAleaTag = tagSlugs.some((slugValue) => allowedTags.has(slugValue));
+  const isExcluded = tagSlugs.some((slugValue) => excludeTags.has(slugValue));
+
+  const outcomes = [
+    { name: "Yes", probability: yesProbability },
+    { name: "No", probability: yesProbability !== null ? 1 - yesProbability : null },
+  ];
+
+  const seriesTicker =
+    market?.series_ticker ?? market?.event_ticker ?? market?.ticker ?? null;
+  const marketUrl = seriesTicker
+    ? `https://kalshi.com/markets/${String(seriesTicker).toLowerCase()}`
+    : null;
+
+  return {
+    id: String(id),
+    eventId: market?.event_ticker ? String(market.event_ticker) : null,
+    slug: market?.ticker ? String(market.ticker).toLowerCase() : null,
+    question: title,
+    description,
+    resolutionSource,
+    endDate,
+    liquidity: liquidity ?? 0,
+    volume24h: volume24h ?? 0,
+    openInterest: openInterest ?? 0,
+    tags,
+    outcomes,
+    isMultiOutcome: false,
+    restricted: false,
+    marketUrl,
+    isExcluded,
+    rawPayload: { market },
+    hasAleaTag,
+    hasOpenInterestField: true,
+    hasResolutionSourceField: Boolean(resolutionSource),
+    source: "kalshi",
+  };
 };
 
 const buildAllowedTagSet = (config) => {
@@ -417,6 +594,7 @@ const buildMarketRecord = (market, event, index, config, allowedTags, excludeTag
     hasAleaTag,
     hasOpenInterestField,
     hasResolutionSourceField,
+    source: "polymarket",
   };
 };
 
@@ -510,6 +688,7 @@ export const runSync = async (options = {}) => {
   try {
     const events = await fetchAllEvents();
     const markets = [];
+    const kalshiMarkets = [];
     const snapshotMarkets = [];
 
     events.forEach((event) => {
@@ -520,9 +699,21 @@ export const runSync = async (options = {}) => {
       });
     });
 
+    try {
+      const kalshiRaw = await fetchKalshiMarkets();
+      kalshiRaw.forEach((market) => {
+        const record = buildKalshiRecord(market, config, allowedTags, excludeTags);
+        if (record) kalshiMarkets.push(record);
+      });
+    } catch (error) {
+      console.error("Kalshi fetch failed", error);
+    }
+
+    const allMarkets = [...markets, ...kalshiMarkets];
+
     const marketLimit = config.sync_market_limit ?? null;
-    const allowedMarkets = markets.filter((market) => market.hasAleaTag);
-    const candidateMarkets = allowedMarkets.length ? allowedMarkets : markets;
+    const allowedMarkets = allMarkets.filter((market) => market.hasAleaTag);
+    const candidateMarkets = allowedMarkets.length ? allowedMarkets : allMarkets;
     const marketsToProcess =
       Number.isFinite(marketLimit) && marketLimit > 0 && candidateMarkets.length > marketLimit
         ? [...candidateMarkets]
@@ -568,6 +759,7 @@ export const runSync = async (options = {}) => {
           const score = scoreMarket(market, config, refs);
           snapshotMarkets.push({
             id: market.id,
+            source: market.source ?? "polymarket",
             question: market.question,
             description: market.description,
             endDate: market.endDate ? market.endDate.toISOString() : null,
@@ -582,6 +774,7 @@ export const runSync = async (options = {}) => {
             score,
           });
           if (!dbAvailable || !prisma) return;
+          if (market.source && market.source !== "polymarket") return;
           try {
             await prisma.market.upsert({
               where: { id: market.id },

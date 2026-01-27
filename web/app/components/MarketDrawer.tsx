@@ -48,6 +48,7 @@ type ResearchPackDraft = {
 
 type MarketDetail = {
   id: string;
+  source?: string | null;
   question: string;
   description?: string | null;
   endDate?: string | null;
@@ -907,7 +908,7 @@ export const MarketDrawer = ({
                   rel="noreferrer"
                   className={`rounded-full border border-[color:var(--border)] px-4 py-2.5 text-[11px] font-semibold text-[color:var(--ink-dim)] transition hover:border-[color:var(--accent-soft)] hover:text-[color:var(--ink)] ${focusRing}`}
                 >
-                  Open in Polymarket
+                  Open in {market.source === "kalshi" ? "Kalshi" : "Polymarket"}
                 </a>
               ) : null}
             </div>
