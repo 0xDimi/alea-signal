@@ -752,6 +752,12 @@ export const runSync = async (options = {}) => {
     const events = await fetchAllEvents();
     const markets = [];
     const kalshiMarkets = [];
+    const kalshiStats = {
+      marketsFetched: 0,
+      eventsFetched: 0,
+      marketError: null,
+      eventError: null,
+    };
     const snapshotMarkets = [];
 
     events.forEach((event) => {
@@ -767,13 +773,17 @@ export const runSync = async (options = {}) => {
       let kalshiEvents = [];
       try {
         kalshiRaw = await fetchKalshiMarkets();
+        kalshiStats.marketsFetched = kalshiRaw.length;
       } catch (error) {
+        kalshiStats.marketError = String(error?.message ?? error);
         console.error("Kalshi market fetch failed", error);
         kalshiRaw = [];
       }
       try {
         kalshiEvents = await fetchKalshiEvents();
+        kalshiStats.eventsFetched = kalshiEvents.length;
       } catch (error) {
+        kalshiStats.eventError = String(error?.message ?? error);
         console.error("Kalshi event fetch failed", error);
         kalshiEvents = [];
       }
@@ -997,6 +1007,7 @@ export const runSync = async (options = {}) => {
     const result = {
       events: events.length,
       markets: upserted,
+      kalshi: kalshiStats,
       refs,
       dbStatus: dbAvailable ? "ok" : "skipped",
       dbError: dbError ? String(dbError?.message ?? dbError) : null,
