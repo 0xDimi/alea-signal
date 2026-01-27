@@ -278,10 +278,17 @@ export const GET = async (request: Request) => {
       snapshot?.generatedAt && !Number.isNaN(new Date(snapshot.generatedAt).getTime())
         ? Date.now() - new Date(snapshot.generatedAt).getTime()
         : Number.POSITIVE_INFINITY;
+    const snapshotHasKalshi = snapshot?.markets?.some(
+      (market) =>
+        String(market.source ?? "")
+          .toLowerCase()
+          .includes("kalshi") || String(market.marketUrl ?? "").includes("kalshi.com")
+    );
     const snapshotStale =
       !snapshot?.markets?.length ||
       !Number.isFinite(maxSnapshotAgeMs) ||
-      snapshotAgeMs > maxSnapshotAgeMs;
+      snapshotAgeMs > maxSnapshotAgeMs ||
+      (sourceFilter === "kalshi" && !snapshotHasKalshi);
     let markets: MarketRow[] = [];
     let usedSnapshot = false;
 
