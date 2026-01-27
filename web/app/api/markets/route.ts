@@ -288,7 +288,7 @@ export const GET = async (request: Request) => {
       !snapshot?.markets?.length ||
       !Number.isFinite(maxSnapshotAgeMs) ||
       snapshotAgeMs > maxSnapshotAgeMs ||
-      (sourceFilter === "kalshi" && !snapshotHasKalshi);
+      ((sourceFilter === "kalshi" || sourceFilter === "all") && !snapshotHasKalshi);
     let markets: MarketRow[] = [];
     let usedSnapshot = false;
 

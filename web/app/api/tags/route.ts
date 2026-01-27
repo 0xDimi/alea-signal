@@ -74,7 +74,7 @@ export const GET = async (request: Request) => {
       !snapshot?.markets?.length ||
       !Number.isFinite(maxSnapshotAgeMs) ||
       snapshotAgeMs > maxSnapshotAgeMs ||
-      (sourceFilter === "kalshi" && !snapshotHasKalshi);
+      ((sourceFilter === "kalshi" || sourceFilter === "all") && !snapshotHasKalshi);
     let markets: MarketTagRow[] = [];
     if (!snapshotStale && snapshot?.markets?.length) {
       markets = snapshot.markets.map((market) => ({

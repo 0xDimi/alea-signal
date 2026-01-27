@@ -249,11 +249,47 @@ const fetchKalshiMarkets = async () => {
   return markets;
 };
 
-const buildKalshiRecord = (market, config, allowedTags, excludeTags) => {
+const fetchKalshiEvents = async () => {
+  const events = [];
+  let cursor = null;
+  let pages = 0;
+  while (pages < KALSHI_MAX_PAGES) {
+    const params = new URLSearchParams();
+    params.set("status", KALSHI_STATUS);
+    params.set("limit", String(KALSHI_LIMIT));
+    if (cursor) params.set("cursor", cursor);
+    const url = `${KALSHI_BASE_URL}/events?${params.toString()}`;
+    const data = await fetchJson(url);
+    const batch = Array.isArray(data?.events) ? data.events : [];
+    events.push(...batch);
+    cursor = data?.cursor ?? data?.next_cursor ?? null;
+    pages += 1;
+    if (!cursor || batch.length === 0) break;
+  }
+  return events;
+};
+
+const mapKalshiCategoryTags = (category) => {
+  const slug = slugifyTag(category);
+  switch (slug) {
+    case "financials":
+      return ["stocks", "rates", "fed", "etf"];
+    case "economics":
+      return ["macro", "gdp", "cpi", "jobs"];
+    case "companies":
+      return ["stocks", "equities", "earnings"];
+    case "transportation":
+      return ["oil"];
+    default:
+      return [];
+  }
+};
+
+const buildKalshiRecord = (market, eventMeta, config, allowedTags, excludeTags) => {
   const id = market?.ticker ?? market?.id ?? market?.market_id ?? null;
   if (!id) return null;
-  const title = market?.title ?? "Untitled market";
-  const subtitle = market?.subtitle ?? "";
+  const title = market?.title ?? eventMeta?.title ?? "Untitled market";
+  const subtitle = market?.subtitle ?? eventMeta?.sub_title ?? "";
   const rulesPrimary = market?.rules_primary ?? "";
   const rulesSecondary = market?.rules_secondary ?? "";
   const description = rulesPrimary || subtitle || null;
@@ -295,10 +331,12 @@ const buildKalshiRecord = (market, config, allowedTags, excludeTags) => {
     ? openInterestContracts * notionalValue
     : openInterestContracts;
 
-  const categorySlug = market?.category ? slugifyTag(market.category) : null;
+  const category = market?.category ?? eventMeta?.category ?? null;
+  const categorySlug = category ? slugifyTag(category) : null;
+  const categoryTags = category ? mapKalshiCategoryTags(category) : [];
   const text = `${title} ${subtitle} ${rulesPrimary} ${rulesSecondary}`;
   const textTags = inferTagsFromText(text, config);
-  const rawTags = [categorySlug, ...textTags].filter(Boolean);
+  const rawTags = [categorySlug, ...textTags, ...categoryTags].filter(Boolean);
   const tagSlugs = rawTags.map((tag) => slugifyTag(tag)).filter(Boolean);
   const tags = normalizeTags(tagSlugs);
 
@@ -705,9 +743,26 @@ export const runSync = async (options = {}) => {
     });
 
     try {
-      const kalshiRaw = await fetchKalshiMarkets();
+      const [kalshiRaw, kalshiEvents] = await Promise.all([
+        fetchKalshiMarkets(),
+        fetchKalshiEvents(),
+      ]);
+      const kalshiEventMap = new Map(
+        kalshiEvents
+          .filter((event) => event?.event_ticker)
+          .map((event) => [String(event.event_ticker), event])
+      );
       kalshiRaw.forEach((market) => {
-        const record = buildKalshiRecord(market, config, allowedTags, excludeTags);
+        const eventMeta = market?.event_ticker
+          ? kalshiEventMap.get(String(market.event_ticker))
+          : null;
+        const record = buildKalshiRecord(
+          market,
+          eventMeta,
+          config,
+          allowedTags,
+          excludeTags
+        );
         if (record) kalshiMarkets.push(record);
       });
     } catch (error) {
