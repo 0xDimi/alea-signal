@@ -29,6 +29,47 @@ const KALSHI_EVENT_LIMIT = Math.min(
   200
 );
 const KALSHI_MAX_PAGES = Number(process.env.KALSHI_MAX_PAGES ?? 10);
+const KALSHI_CRYPTO_KEYWORDS = [
+  "crypto",
+  "cryptocurrency",
+  "bitcoin",
+  "btc",
+  "ethereum",
+  "eth",
+  "solana",
+  "sol",
+  "xrp",
+  "ripple",
+  "doge",
+  "dogecoin",
+  "litecoin",
+  "ltc",
+  "cardano",
+  "ada",
+  "polygon",
+  "matic",
+  "avalanche",
+  "avax",
+  "bnb",
+  "binance",
+  "chainlink",
+  "defi",
+  "stablecoin",
+  "stablecoins",
+  "memecoin",
+  "memecoins",
+  "nft",
+  "staking",
+  "restaking",
+  "airdrop",
+  "layer-1",
+  "layer-2",
+  "l1",
+  "l2",
+  "rollup",
+  "rollups",
+  "zk",
+];
 const MAX_RETRIES = 3;
 const MARKET_SNAPSHOT_KEY = "snapshots/markets.json";
 const STATUS_SNAPSHOT_KEY = "snapshots/status.json";
@@ -372,14 +413,16 @@ const buildKalshiRecord = (market, eventMeta, config, allowedTags, excludeTags) 
   const textTags = inferTagsFromText(text, config);
   const rawTags = [categorySlug, ...textTags, ...categoryTags].filter(Boolean);
   const tagSlugs = rawTags.map((tag) => slugifyTag(tag)).filter(Boolean);
-  const tags = normalizeTags(tagSlugs);
 
-  const cryptoTags = buildSectorTagSet(config, "crypto");
   const hasCryptoTag =
     categorySlug === "crypto" ||
-    Array.from(cryptoTags).some((tag) => matchesTagInText(text, tag));
-  const hasAleaTag =
-    hasCryptoTag && tagSlugs.some((slugValue) => allowedTags.has(slugValue));
+    KALSHI_CRYPTO_KEYWORDS.some((tag) => matchesTagInText(text, tag));
+  if (hasCryptoTag && !tagSlugs.includes("crypto")) {
+    tagSlugs.push("crypto");
+  }
+  const tags = normalizeTags(tagSlugs);
+
+  const hasAleaTag = hasCryptoTag && allowedTags.has("crypto");
   const isExcluded = tagSlugs.some((slugValue) => excludeTags.has(slugValue));
 
   const outcomes = [
