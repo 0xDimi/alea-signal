@@ -379,7 +379,7 @@ export const GET = async (request: Request) => {
         minOutcomeProbability
       );
       const lowProbability =
-        outcomesSummary.maxProbability !== null &&
+        outcomesSummary.maxProbability === null ||
         outcomesSummary.maxProbability < minOutcomeProbability;
       const slugs = tagSlugs(market.tags);
       const hasAllowedTag = slugs.some((slug) => allowedTagSet.has(slug));
