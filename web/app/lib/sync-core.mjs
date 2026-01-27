@@ -547,11 +547,16 @@ const buildMarketRecord = (market, event, index, config, allowedTags, excludeTag
   const outcomeList = Array.isArray(outcomeEntries) ? outcomeEntries : [];
   const outcomeNames = outcomeList.map(normalizeOutcomeName).filter(Boolean);
   const outcomePrices = normalizeOutcomePrices(outcomePricesRaw);
-  const outcomes = outcomeNames.length
-    ? outcomeList
-        .map((entry, idx) => {
-          const name = normalizeOutcomeName(entry);
-          if (!name) return null;
+  const fallbackNames = outcomePrices.length
+    ? outcomePrices.map((_, idx) =>
+        outcomePrices.length === 2 ? (idx === 0 ? "Yes" : "No") : `Outcome ${idx + 1}`
+      )
+    : [];
+  const resolvedNames = outcomeNames.length ? outcomeNames : fallbackNames;
+  const outcomes = resolvedNames.length
+    ? resolvedNames
+        .map((name, idx) => {
+          const entry = outcomeList[idx];
           const entryProbability =
             entry && typeof entry === "object"
               ? safeNumber(
