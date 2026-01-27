@@ -813,19 +813,38 @@ export const runSync = async (options = {}) => {
     const allMarkets = [...markets, ...kalshiMarkets];
 
     const marketLimit = config.sync_market_limit ?? null;
+    const minKalshi = Number(
+      config.sync_min_kalshi ?? process.env.SYNC_MIN_KALSHI ?? 200
+    );
     const allowedMarkets = allMarkets.filter((market) => market.hasAleaTag);
     const candidateMarkets = allowedMarkets.length ? allowedMarkets : allMarkets;
-    const marketsToProcess =
-      Number.isFinite(marketLimit) && marketLimit > 0 && candidateMarkets.length > marketLimit
-        ? [...candidateMarkets]
-            .sort(
-              (a, b) =>
-                b.liquidity - a.liquidity ||
-                b.volume24h - a.volume24h ||
-                b.openInterest - a.openInterest
-            )
-            .slice(0, marketLimit)
-        : candidateMarkets;
+    const rankMarkets = (records) =>
+      [...records].sort(
+        (a, b) =>
+          b.liquidity - a.liquidity ||
+          b.volume24h - a.volume24h ||
+          b.openInterest - a.openInterest
+      );
+    const applyMarketLimit = (records) => {
+      if (!Number.isFinite(marketLimit) || marketLimit <= 0) return records;
+      if (records.length <= marketLimit) return records;
+      const kalshiRecords =
+        minKalshi > 0
+          ? records.filter((record) => record.source === "kalshi")
+          : [];
+      if (!kalshiRecords.length) {
+        return rankMarkets(records).slice(0, marketLimit);
+      }
+      const kalshiLimit = Math.min(marketLimit, minKalshi, kalshiRecords.length);
+      const kalshiTop = rankMarkets(kalshiRecords).slice(0, kalshiLimit);
+      const kalshiIds = new Set(kalshiTop.map((record) => record.id));
+      const remainingSlots = Math.max(0, marketLimit - kalshiTop.length);
+      const rest = rankMarkets(
+        records.filter((record) => !kalshiIds.has(record.id))
+      ).slice(0, remainingSlots);
+      return [...kalshiTop, ...rest];
+    };
+    const marketsToProcess = applyMarketLimit(candidateMarkets);
 
     const liquidityValues = marketsToProcess
       .map((market) => market.liquidity)
