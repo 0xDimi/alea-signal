@@ -24,8 +24,9 @@ const KALSHI_LIMIT = Number(process.env.KALSHI_LIMIT ?? 1000);
 const KALSHI_MARKET_LIMIT = Number(
   process.env.KALSHI_MARKET_LIMIT ?? KALSHI_LIMIT ?? 1000
 );
-const KALSHI_EVENT_LIMIT = Number(
-  process.env.KALSHI_EVENT_LIMIT ?? Math.min(KALSHI_LIMIT, 200)
+const KALSHI_EVENT_LIMIT = Math.min(
+  Number(process.env.KALSHI_EVENT_LIMIT ?? KALSHI_LIMIT ?? 200),
+  200
 );
 const KALSHI_MAX_PAGES = Number(process.env.KALSHI_MAX_PAGES ?? 10);
 const MAX_RETRIES = 3;
