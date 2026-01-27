@@ -36,6 +36,14 @@ const dedupeById = (records: MarketSnapshot["markets"]) => {
   return Array.from(map.values());
 };
 
+const hasKalshiMarkets = (records: MarketSnapshot["markets"]) =>
+  records.some((record) => {
+    const source = String(record.source ?? "").toLowerCase();
+    if (source.includes("kalshi")) return true;
+    const url = String(record.marketUrl ?? "");
+    return url.includes("kalshi.com");
+  });
+
 const ensureOutcomes = (records: MarketSnapshot["markets"]) =>
   records.map((record) => {
     if (record.outcomes && Array.isArray(record.outcomes) && record.outcomes.length) {
@@ -64,12 +72,18 @@ const ensureOutcomes = (records: MarketSnapshot["markets"]) =>
     return { ...record, outcomes };
   });
 
-export const getRuntimeSnapshot = async (): Promise<RuntimeSnapshot | null> => {
+export const getRuntimeSnapshot = async (options?: {
+  requireKalshi?: boolean;
+}): Promise<RuntimeSnapshot | null> => {
   const ttl = resolveTtl();
   const now = Date.now();
   const cached = cache.get("snapshot");
   if (cached && now - cached.fetchedAt < ttl) {
-    return cached.data;
+    if (options?.requireKalshi && !hasKalshiMarkets(cached.data.markets)) {
+      cache.delete("snapshot");
+    } else {
+      return cached.data;
+    }
   }
 
   if (!inFlight) {

@@ -83,7 +83,9 @@ export const GET = async (request: Request) => {
         marketUrl: market.marketUrl ?? null,
       }));
     } else {
-      const runtimeSnapshot = await getRuntimeSnapshot();
+      const runtimeSnapshot = await getRuntimeSnapshot({
+        requireKalshi: sourceFilter === "kalshi" || sourceFilter === "all",
+      });
       if (runtimeSnapshot?.markets?.length) {
         markets = runtimeSnapshot.markets.map((market) => ({
           tags: market.tags,

@@ -309,7 +309,9 @@ export const GET = async (request: Request) => {
         }));
       }
     } else {
-      const runtimeSnapshot = await getRuntimeSnapshot();
+      const runtimeSnapshot = await getRuntimeSnapshot({
+        requireKalshi: sourceFilter === "kalshi" || sourceFilter === "all",
+      });
       if (runtimeSnapshot?.markets?.length) {
         usedSnapshot = true;
         markets = runtimeSnapshot.markets.map((market) => ({
