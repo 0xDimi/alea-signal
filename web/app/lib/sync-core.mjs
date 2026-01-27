@@ -18,9 +18,15 @@ const EVENTS_BASE_URL =
 const KALSHI_BASE_URL =
   process.env.KALSHI_BASE_URL ?? "https://api.elections.kalshi.com/trade-api/v2";
 const KALSHI_MARKET_STATUS =
-  process.env.KALSHI_MARKET_STATUS ?? process.env.KALSHI_STATUS ?? "active";
+  process.env.KALSHI_MARKET_STATUS ?? process.env.KALSHI_STATUS ?? "open";
 const KALSHI_EVENT_STATUS = process.env.KALSHI_EVENT_STATUS ?? "open";
 const KALSHI_LIMIT = Number(process.env.KALSHI_LIMIT ?? 1000);
+const KALSHI_MARKET_LIMIT = Number(
+  process.env.KALSHI_MARKET_LIMIT ?? KALSHI_LIMIT ?? 1000
+);
+const KALSHI_EVENT_LIMIT = Number(
+  process.env.KALSHI_EVENT_LIMIT ?? Math.min(KALSHI_LIMIT, 200)
+);
 const KALSHI_MAX_PAGES = Number(process.env.KALSHI_MAX_PAGES ?? 10);
 const MAX_RETRIES = 3;
 const MARKET_SNAPSHOT_KEY = "snapshots/markets.json";
@@ -103,6 +109,15 @@ const parseDollars = (value) => {
   if (value === null || value === undefined) return null;
   const num = typeof value === "string" ? Number(value) : Number(value);
   return Number.isFinite(num) ? num : null;
+};
+
+const normalizeKalshiStatus = (value) => {
+  if (!value) return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "active") return "open";
+  if (normalized === "opened") return "open";
+  return normalized;
 };
 
 const textIncludes = (text, needle) =>
@@ -235,10 +250,11 @@ const fetchKalshiMarkets = async () => {
   const markets = [];
   let cursor = null;
   let pages = 0;
+  const status = normalizeKalshiStatus(KALSHI_MARKET_STATUS);
   while (pages < KALSHI_MAX_PAGES) {
     const params = new URLSearchParams();
-    params.set("status", KALSHI_MARKET_STATUS);
-    params.set("limit", String(KALSHI_LIMIT));
+    if (status) params.set("status", status);
+    params.set("limit", String(KALSHI_MARKET_LIMIT));
     if (cursor) params.set("cursor", cursor);
     const url = `${KALSHI_BASE_URL}/markets?${params.toString()}`;
     const data = await fetchJson(url);
@@ -255,10 +271,11 @@ const fetchKalshiEvents = async () => {
   const events = [];
   let cursor = null;
   let pages = 0;
+  const status = normalizeKalshiStatus(KALSHI_EVENT_STATUS);
   while (pages < KALSHI_MAX_PAGES) {
     const params = new URLSearchParams();
-    params.set("status", KALSHI_EVENT_STATUS);
-    params.set("limit", String(KALSHI_LIMIT));
+    if (status) params.set("status", status);
+    params.set("limit", String(KALSHI_EVENT_LIMIT));
     if (cursor) params.set("cursor", cursor);
     const url = `${KALSHI_BASE_URL}/events?${params.toString()}`;
     const data = await fetchJson(url);
