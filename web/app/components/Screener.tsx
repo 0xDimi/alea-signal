@@ -924,7 +924,7 @@ export const Screener = () => {
                         <span className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
                           {market.mode}
                         </span>
-                        <span className="text-[11px] font-semibold text-[color:var(--ink-dim)]">
+                        <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
                           {market.source === "kalshi" ? "Kalshi" : "Polymarket"}
                         </span>
                       </div>
@@ -1172,8 +1172,12 @@ export const Screener = () => {
                         <td
                           className={`${rowCell(isSelected)} text-[11px] font-semibold tracking-[0.1em] text-[color:var(--ink-dim)]`}
                         >
-                          {market.mode} ·{" "}
-                          {market.source === "kalshi" ? "Kalshi" : "Polymarket"}
+                          <span className="inline-flex items-center gap-2">
+                            <span>{market.mode}</span>
+                            <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-dim)]">
+                              {market.source === "kalshi" ? "Kalshi" : "Polymarket"}
+                            </span>
+                          </span>
                         </td>
                         <td className={`${rowCell(isSelected)} text-[color:var(--ink)]`}>
                           <div className="max-w-sm text-sm font-semibold leading-snug text-[color:var(--ink)]">
