@@ -294,25 +294,52 @@ const fetchAllEvents = async () => {
   return events;
 };
 
-const fetchKalshiMarkets = async () => {
+const fetchKalshiMarkets = async (options = {}) => {
   const markets = [];
-  let cursor = null;
-  let pages = 0;
+  const eventTickers = Array.isArray(options?.eventTickers)
+    ? options.eventTickers.filter(Boolean)
+    : [];
   const status = normalizeKalshiStatus(KALSHI_MARKET_STATUS);
-  while (pages < KALSHI_MAX_PAGES) {
+
+  const fetchPages = async (params) => {
+    let cursor = null;
+    let pages = 0;
+    while (pages < KALSHI_MAX_PAGES) {
+      const pageParams = new URLSearchParams(params);
+      if (cursor) pageParams.set("cursor", cursor);
+      const url = `${KALSHI_BASE_URL}/markets?${pageParams.toString()}`;
+      const data = await fetchJson(url);
+      const batch = Array.isArray(data?.markets) ? data.markets : [];
+      markets.push(...batch);
+      cursor = data?.cursor ?? data?.next_cursor ?? null;
+      pages += 1;
+      if (!cursor || batch.length === 0) break;
+    }
+  };
+
+  if (eventTickers.length) {
+    for (const ticker of eventTickers) {
+      const params = new URLSearchParams();
+      if (status) params.set("status", status);
+      params.set("limit", String(KALSHI_MARKET_LIMIT));
+      params.set("event_ticker", String(ticker));
+      await fetchPages(params);
+      await sleep(120);
+    }
+  } else {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     params.set("limit", String(KALSHI_MARKET_LIMIT));
-    if (cursor) params.set("cursor", cursor);
-    const url = `${KALSHI_BASE_URL}/markets?${params.toString()}`;
-    const data = await fetchJson(url);
-    const batch = Array.isArray(data?.markets) ? data.markets : [];
-    markets.push(...batch);
-    cursor = data?.cursor ?? data?.next_cursor ?? null;
-    pages += 1;
-    if (!cursor || batch.length === 0) break;
+    await fetchPages(params);
   }
-  return markets;
+
+  const deduped = new Map();
+  markets.forEach((market) => {
+    const key = market?.ticker ?? market?.id ?? market?.market_id ?? null;
+    if (!key || deduped.has(key)) return;
+    deduped.set(key, market);
+  });
+  return Array.from(deduped.values());
 };
 
 const fetchKalshiEvents = async () => {
@@ -334,6 +361,15 @@ const fetchKalshiEvents = async () => {
     if (!cursor || batch.length === 0) break;
   }
   return events;
+};
+
+const isKalshiCryptoEvent = (event) => {
+  const categorySlug = event?.category ? slugifyTag(event.category) : null;
+  if (categorySlug === "crypto") return true;
+  const title = event?.title ?? "";
+  const subtitle = event?.sub_title ?? event?.subtitle ?? "";
+  const text = `${title} ${subtitle}`.trim();
+  return KALSHI_CRYPTO_KEYWORDS.some((tag) => matchesTagInText(text, tag));
 };
 
 const mapKalshiCategoryTags = (category) => {
@@ -818,6 +854,7 @@ export const runSync = async (options = {}) => {
     const kalshiStats = {
       marketsFetched: 0,
       eventsFetched: 0,
+      cryptoEvents: 0,
       marketError: null,
       eventError: null,
     };
@@ -834,21 +871,29 @@ export const runSync = async (options = {}) => {
     try {
       let kalshiRaw = [];
       let kalshiEvents = [];
+      let cryptoEventTickers = [];
       try {
-        kalshiRaw = await fetchKalshiMarkets();
+        kalshiEvents = await fetchKalshiEvents();
+        kalshiStats.eventsFetched = kalshiEvents.length;
+        cryptoEventTickers = kalshiEvents
+          .filter((event) => isKalshiCryptoEvent(event))
+          .map((event) => event?.event_ticker)
+          .filter(Boolean);
+        kalshiStats.cryptoEvents = cryptoEventTickers.length;
+      } catch (error) {
+        kalshiStats.eventError = String(error?.message ?? error);
+        console.error("Kalshi event fetch failed", error);
+        kalshiEvents = [];
+      }
+      try {
+        kalshiRaw = await fetchKalshiMarkets(
+          cryptoEventTickers.length ? { eventTickers: cryptoEventTickers } : undefined
+        );
         kalshiStats.marketsFetched = kalshiRaw.length;
       } catch (error) {
         kalshiStats.marketError = String(error?.message ?? error);
         console.error("Kalshi market fetch failed", error);
         kalshiRaw = [];
-      }
-      try {
-        kalshiEvents = await fetchKalshiEvents();
-        kalshiStats.eventsFetched = kalshiEvents.length;
-      } catch (error) {
-        kalshiStats.eventError = String(error?.message ?? error);
-        console.error("Kalshi event fetch failed", error);
-        kalshiEvents = [];
       }
 
       const kalshiEventMap = new Map(
