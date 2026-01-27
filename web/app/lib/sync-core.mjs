@@ -763,10 +763,21 @@ export const runSync = async (options = {}) => {
     });
 
     try {
-      const [kalshiRaw, kalshiEvents] = await Promise.all([
-        fetchKalshiMarkets(),
-        fetchKalshiEvents(),
-      ]);
+      let kalshiRaw = [];
+      let kalshiEvents = [];
+      try {
+        kalshiRaw = await fetchKalshiMarkets();
+      } catch (error) {
+        console.error("Kalshi market fetch failed", error);
+        kalshiRaw = [];
+      }
+      try {
+        kalshiEvents = await fetchKalshiEvents();
+      } catch (error) {
+        console.error("Kalshi event fetch failed", error);
+        kalshiEvents = [];
+      }
+
       const kalshiEventMap = new Map(
         kalshiEvents
           .filter((event) => event?.event_ticker)
